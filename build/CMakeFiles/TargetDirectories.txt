@@ -1,7 +1,0 @@
-/home/hy/awakening/build/CMakeFiles/awakening.dir
-/home/hy/awakening/build/CMakeFiles/a.dir
-/home/hy/awakening/build/CMakeFiles/edit_cache.dir
-/home/hy/awakening/build/CMakeFiles/rebuild_cache.dir
-/home/hy/awakening/build/cuda_infer_build/CMakeFiles/cuda_infer.dir
-/home/hy/awakening/build/cuda_infer_build/CMakeFiles/edit_cache.dir
-/home/hy/awakening/build/cuda_infer_build/CMakeFiles/rebuild_cache.dir

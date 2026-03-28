@@ -1,1 +1,0 @@
-/home/hy/awakening/env.bash
