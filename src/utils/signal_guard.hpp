@@ -1,4 +1,5 @@
 #pragma once
+#include "utils/logger.hpp"
 #include <atomic>
 #include <csignal>
 #include <functional>
@@ -48,7 +49,7 @@ private:
 
         inst.running_ = false;
 
-        SPDLOG_TRACE("Signal {} received, stopping...", signum);
+        AWAKENING_INFO("Signal {} received, stopping...", signum);
 
         std::lock_guard<std::mutex> lock(inst.mtx_);
         for (auto& cb: inst.callbacks_) {

@@ -17,13 +17,10 @@ hik_camera:
   exposure_time: 2000
   gain: 16.9
   gamma: 0.7 #Bayer用不了
-  trigger_type: none
+  trigger_mode: Off
   trigger_source: ""
-  trigger_activation: 0
-  use_raw: false
-  use_rgb: false
-  use_ea: false
-  use_cuda_cvt: true
+  trigger_activation: ""
+  format: "bgr"
 
   
 video_player:

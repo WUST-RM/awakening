@@ -1,5 +1,6 @@
 #include "armor_infer.hpp"
 #include "tasks/auto_aim/type.hpp"
+#include "utils/common/image.hpp"
 #include <memory>
 
 namespace awakening::auto_aim {
@@ -28,7 +29,7 @@ struct ModelTraits<Mode::TUP> {
     static constexpr int NUM_CLASSES = 8;
     static constexpr int NUM_COLORS = 4;
     static constexpr bool USE_NORM = false;
-    static constexpr bool INPUT_RGB = true;
+    static constexpr PixelFormat TARGET_FORMAT = PixelFormat::BGR;
     static constexpr std::array CLASSES = { ArmorClass::SENTRY,  ArmorClass::NO1,
                                             ArmorClass::NO2,     ArmorClass::NO3,
                                             ArmorClass::NO4,     ArmorClass::NO5,
@@ -48,7 +49,7 @@ struct ModelTraits<Mode::RP> {
     static constexpr int NUM_CLASSES = 9;
     static constexpr int NUM_COLORS = 4;
     static constexpr bool USE_NORM = true;
-    static constexpr bool INPUT_RGB = false;
+    static constexpr PixelFormat TARGET_FORMAT = PixelFormat::RGB;
     static constexpr std::array CLASSES = { ArmorClass::SENTRY,  ArmorClass::NO1,
                                             ArmorClass::NO2,     ArmorClass::NO3,
                                             ArmorClass::NO4,     ArmorClass::NO5,
@@ -65,7 +66,7 @@ struct ModelTraits<Mode::AT> {
     static constexpr int INPUT_H = 640;
     static constexpr int NUM_KPTS = 4;
     static constexpr bool USE_NORM = true;
-    static constexpr bool INPUT_RGB = false;
+    static constexpr PixelFormat TARGET_FORMAT = PixelFormat::RGB;
     static constexpr std::array<std::pair<ArmorColor, ArmorClass>, 64> CLASSES = { {
         { ArmorColor::BLUE, ArmorClass::SENTRY },    { ArmorColor::BLUE, ArmorClass::NO1 },
         { ArmorColor::BLUE, ArmorClass::NO2 },       { ArmorColor::BLUE, ArmorClass::NO3 },
@@ -127,14 +128,14 @@ inline void nms_merge_sorted_bboxes(
         for (int idx: out_indices) {
             Armor& b = objs[idx];
             const float iou =
-                rectIoU(a.net->key_points.boundingBox(), b.net->key_points.boundingBox());
+                rectIoU(a.net.key_points.boundingBox(), b.net.key_points.boundingBox());
             if (std::isnan(iou) || iou > nms_threshold) {
                 keep = false;
                 if (a.number == b.number && a.color == b.color && iou > MERGE_MIN_IOU
-                    && std::abs(a.net->confidence - b.net->confidence) < MERGE_CONF_ERROR)
+                    && std::abs(a.net.confidence - b.net.confidence) < MERGE_CONF_ERROR)
                 {
                     // accumulate points for later averaging
-                    b.net->tmp_points.push_back(a.net->key_points.points);
+                    b.net.tmp_points.push_back(a.net.key_points.points);
                 }
                 break;
             }
@@ -146,7 +147,7 @@ inline void nms_merge_sorted_bboxes(
 
 inline std::vector<Armor> topKAndNms(std::vector<Armor>& objs) {
     std::sort(objs.begin(), objs.end(), [](const Armor& a, const Armor& b) {
-        return a.net->confidence > b.net->confidence;
+        return a.net.confidence > b.net.confidence;
     });
 
     if (static_cast<int>(objs.size()) > TOP_K)
@@ -161,17 +162,17 @@ inline std::vector<Armor> topKAndNms(std::vector<Armor>& objs) {
     for (size_t i = 0; i < indices.size(); ++i) {
         result.push_back(std::move(objs[indices[i]]));
         auto& ro = result.back();
-        if (ro.net && ro.net->tmp_points.size() >= 1) {
+        if (ro.net.tmp_points.size() >= 1) {
             std::array<cv::Point2f, 6> accum {};
             std::array<int, 6> count {};
-            const auto& base_pts_opt = ro.net->key_points.points;
+            const auto& base_pts_opt = ro.net.key_points.points;
             for (size_t k = 0; k < 6; ++k) {
                 if (base_pts_opt[k]) {
                     accum[k] += *base_pts_opt[k];
                     count[k]++;
                 }
             }
-            for (const auto& pts_opt: ro.net->tmp_points) {
+            for (const auto& pts_opt: ro.net.tmp_points) {
                 for (size_t k = 0; k < 6; ++k) {
                     if (pts_opt[k]) {
                         accum[k] += *pts_opt[k];
@@ -187,8 +188,8 @@ inline std::vector<Armor> topKAndNms(std::vector<Armor>& objs) {
                     }
                 }
             }
-            ro.net->key_points.points = final_pts;
-            ro.net->tmp_points.clear();
+            ro.net.key_points.points = final_pts;
+            ro.net.tmp_points.clear();
         }
     }
 
@@ -201,13 +202,13 @@ struct ArmorInfer::Impl {
         int input_w;
         int input_h;
         bool use_norm;
-        bool input_rgb;
+        PixelFormat target_format;
         template<typename M>
         void setMode() {
             input_w = M::INPUT_W;
             input_h = M::INPUT_H;
             use_norm = M::USE_NORM;
-            input_rgb = M::INPUT_RGB;
+            target_format = M::TARGET_FORMAT;
         }
         void load(const YAML::Node& config) {
             auto mode_str = config["model_type"].as<std::string>();
@@ -308,16 +309,16 @@ struct ArmorInfer::Impl {
             Armor obj;
             auto& net = obj.net;
             net = Armor::NetCtx();
-            net->color = ModelTraits<Mode::TUP>::COLORS[color_id.x];
-            net->number = ModelTraits<Mode::TUP>::CLASSES[class_id.x];
-            auto& key_points = net->key_points;
+            net.color = ModelTraits<Mode::TUP>::COLORS[color_id.x];
+            net.number = ModelTraits<Mode::TUP>::CLASSES[class_id.x];
+            auto& key_points = net.key_points;
 
             key_points.points[std::to_underlying(I::LEFT_TOP)] = cv::Point2f(x1, y1);
             key_points.points[std::to_underlying(I::LEFT_BOTTOM)] = cv::Point2f(x2, y2);
             key_points.points[std::to_underlying(I::RIGHT_BOTTOM)] = cv::Point2f(x3, y3);
             key_points.points[std::to_underlying(I::RIGHT_TOP)] = cv::Point2f(x4, y4);
-            // net->tmp_points.push_back(key_points.points);
-            net->confidence = confidence;
+            // net.tmp_points.push_back(key_points.points);
+            net.confidence = confidence;
             out_objs.push_back(std::move(obj));
         }
         return topKAndNms(out_objs);
@@ -332,8 +333,8 @@ struct ArmorInfer::Impl {
     bool useNorm() const noexcept {
         return params_.use_norm;
     }
-    bool inputRGB() const noexcept {
-        return params_.input_rgb;
+    PixelFormat targetFormat() const noexcept {
+        return params_.target_format;
     }
 };
 
@@ -356,7 +357,7 @@ int ArmorInfer::inputH() const noexcept {
 bool ArmorInfer::useNorm() const noexcept {
     return _impl->useNorm();
 }
-bool ArmorInfer::inputRGB() const noexcept {
-    return _impl->inputRGB();
+PixelFormat ArmorInfer::targetFormat() const noexcept {
+    return _impl->targetFormat();
 }
 } // namespace awakening::auto_aim

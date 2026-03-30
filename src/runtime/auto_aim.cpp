@@ -1,7 +1,8 @@
-#include "base/robot.hpp"
-#include "common.hpp"
 #include "tasks/auto_aim/armor_detect/armor_detector.hpp"
 #include "tasks/auto_aim/type.hpp"
+#include "tasks/base/robot.hpp"
+#include "utils/common/image.hpp"
+#include "utils/drivers/hik_camera.hpp"
 #include "utils/logger.hpp"
 #include "utils/scheduler/scheduler.hpp"
 #include "utils/signal_guard.hpp"
@@ -15,12 +16,12 @@
 
 using namespace awakening;
 
-struct CameraFrameTag {};
+struct HikTag {};
 struct DetectTag {};
-
-struct MainCameraCtx {
-    Frame frame_id = Frame::CAMERA;
-};
+struct FrameTag {};
+using HikIO = IOPair<HikTag, ImageFrame>;
+using CommonFrameIo = IOPair<FrameTag, CommonFrame>;
+using DetIo = IOPair<DetectTag, auto_aim::Armors>;
 struct LogCtx {
     int camera_count = 0;
     int detect_count = 0;
@@ -36,18 +37,27 @@ struct LogCtx {
     }
 };
 int main() {
-    logger::init(spdlog::level::info);
+    logger::init(spdlog::level::debug);
     Scheduler s;
-
-    Camera<MainCameraCtx> camera;
 
     auto camera_config = YAML::LoadFile("/home/hy/awakening/config/camera.yaml");
     auto auto_aim_config = YAML::LoadFile("/home/hy/awakening/config/auto_aim.yaml");
+    HikCamera camera(camera_config["hik_camera"], s);
     auto_aim::ArmorDetector armor_detector(auto_aim_config["armor_detector"]);
-    using CamIO = IOPair<CameraFrameTag, CommonFrame>;
-    using DetIo = IOPair<DetectTag, auto_aim::Armors>;
+
     LogCtx log_ctx;
-    s.register_task<CamIO, DetIo>("detector", [&](CamIO::second_type&& frame) {
+    s.register_task<HikIO, CommonFrameIo>("push_common_frame", [&](HikIO::second_type&& f) {
+        static int current_id = 0;
+        log_ctx.camera_count++;
+        CommonFrame frame;
+        frame.img_frame = std::move(f);
+        frame.expanded = cv::Rect(0, 0, frame.img_frame.src_img.cols, frame.img_frame.src_img.rows);
+        frame.offset = cv::Point2f(0, 0);
+        frame.id = current_id++;
+        frame.frame_id = std::to_underlying(Frame::CAMERA);
+        return std::make_tuple(std::optional<CommonFrameIo::second_type>(std::move(frame)));
+    });
+    s.register_task<CommonFrameIo, DetIo>("detector", [&](CommonFrameIo::second_type&& frame) {
         static std::atomic<int> running_count = 0;
         auto_aim::Armors armors { .timestamp = frame.img_frame.timestamp,
                                   .id = frame.id,
@@ -61,24 +71,7 @@ int main() {
         running_count--;
         log_ctx.detect_count++;
         auto& show = frame.img_frame.src_img;
-        for (auto& armor: armors.armors) {
-            int i = 0;
-            for (auto& key_point: armor.key_points.points) {
-                if (!key_point.has_value()) {
-                    continue;
-                }
-                cv::circle(show, key_point.value(), 2, cv::Scalar(0, 255, 0), -1);
-                cv::putText(
-                    show,
-                    auto_aim::getStringByArmorKeyPointsIndex(i++),
-                    key_point.value(),
-                    cv::FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    cv::Scalar(0, 255, 0),
-                    1
-                );
-            }
-        }
+        armors.draw(show);
 
         cv::imshow("armor_detect", show);
         cv::waitKey(1);
@@ -108,27 +101,7 @@ int main() {
         );
         log_ctx.reset();
     });
-    auto cam_source = s.register_source<CamIO>("camera");
-    camera.load(camera_config, [&](wust_vl::video::ImageFrame& img_frame) {
-        if (img_frame.src_img.empty())
-            return;
-
-        log_ctx.camera_count++;
-        s.runtime_push_source<CamIO>(cam_source, [f = std::move(img_frame)]() {
-            static int current_id = 0;
-            CommonFrame frame;
-            frame.img_frame = std::move(f);
-            frame.detect_color = EnemyColor::BLUE;
-            frame.expanded =
-                cv::Rect(0, 0, frame.img_frame.src_img.cols, frame.img_frame.src_img.rows);
-            frame.offset = cv::Point2f(0, 0);
-            frame.id = current_id++;
-            frame.frame_id = std::to_underlying(Frame::CAMERA);
-            return std::make_tuple(std::optional<CamIO::second_type>(std::move(frame)));
-        });
-    });
-
-    camera.device_->start();
+    camera.start<HikTag>("hik");
     s.build();
     s.run();
     SignalGuard::spin(std::chrono::milliseconds(1000));

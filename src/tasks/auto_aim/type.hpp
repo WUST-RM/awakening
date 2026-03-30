@@ -1,11 +1,12 @@
 #pragma once
-#include "common.hpp"
+#include "tasks/base/common.hpp"
 #include "utils/utils.hpp"
 #include <array>
 #include <cstddef>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 namespace awakening::auto_aim {
@@ -19,15 +20,15 @@ constexpr int getArmorNumByArmorClass(const ArmorClass& armor_class) {
     constexpr std::array details { 4, 4, 4, 4, 4, 4, 3, 4, 4 };
     return details[std::to_underlying(armor_class)];
 }
-constexpr const char* getStringByArmorColor(ArmorColor armor_class) {
+inline std::string getStringByArmorColor(ArmorColor armor_class) {
     constexpr const char* details[] = { "blue", "red", "none", "purple" };
-    return details[std::to_underlying(armor_class)];
+    return std::string(details[std::to_underlying(armor_class)]);
 }
 
-constexpr const char* getStringByArmorClass(ArmorClass armor_class) {
+inline std::string getStringByArmorClass(ArmorClass armor_class) {
     constexpr const char* details[] = { "sentry", "no1",     "no2",  "no3",    "no4",
                                         "no5",    "outpost", "base", "unknown" };
-    return details[std::to_underlying(armor_class)];
+    return std::string(details[std::to_underlying(armor_class)]);
 }
 
 enum class ArmorKeyPointsIndex : int {
@@ -39,10 +40,10 @@ enum class ArmorKeyPointsIndex : int {
     RIGHT_MID,
     N
 };
-constexpr const char* getStringByArmorKeyPointsIndex(int index) {
+inline std::string getStringByArmorKeyPointsIndex(int index) {
     constexpr const char* details[] = { "right_bottom", "right_top", "left_top",
                                         "left_bottom",  "left_mid",  "right_mid" };
-    return details[index];
+    return std::string(details[index]);
 }
 namespace armor_keypoints {
     using I = ArmorKeyPointsIndex;
@@ -76,7 +77,7 @@ struct ArmorKeyPoints2D {
         bbox.reset();
     }
 
-    std::array<PointT, 6>& lan() {
+    std::array<PointT, 6>& landmarks() {
         auto computeMid = [&](I mid, I top, I bottom) {
             auto& mid_opt = points[std::to_underlying(mid)];
             if (!mid_opt) {
@@ -170,7 +171,7 @@ struct Armor {
         ArmorKeyPoints2D key_points;
         std::vector<std::array<std::optional<cv::Point2f>, 6>> tmp_points;
     };
-    std::optional<NetCtx> net;
+    NetCtx net;
     struct NumberClassifierCtx {
         ArmorClass number = ArmorClass::UNKNOWN;
         cv::Mat number_img;
@@ -185,14 +186,30 @@ struct Armor {
     };
     std::optional<ColorClassifierCtx> color_classifier;
     void tidy() {
-        if (net) {
-            color = net->color;
-            number = net->number;
-            key_points = net->key_points;
-        }
+        color = net.color;
+        number = net.number;
+        key_points = net.key_points;
+
         if (number_classifier) {
             if (number_classifier->number != ArmorClass::UNKNOWN) {
                 number = number_classifier->number;
+            }
+        }
+        if (color_classifier) {
+            auto l = color_classifier->light_colors[ColorClassifierCtx::LEFT];
+            auto r = color_classifier->light_colors[ColorClassifierCtx::RIGHT];
+            if (l == r) {
+                if (l == ArmorColor::NONE) {
+                    if (color != ArmorColor::NONE || color != ArmorColor::PURPLE) {
+                        color = ArmorColor::NONE;
+                    }
+                } else {
+                    color = l;
+                }
+            } else if (l == ArmorColor::NONE && r != ArmorColor::NONE) {
+                color = r;
+            } else if (r == ArmorColor::NONE && l != ArmorColor::NONE) {
+                color = l;
             }
         }
         has_tidy = true;
@@ -209,6 +226,47 @@ struct Armor {
         }
         key_points.transform(transform_matrix);
     }
+    void draw(cv::Mat& img) {
+        if (!has_tidy)
+            return;
+
+        auto& pts = key_points.landmarks();
+
+        using I = ArmorKeyPointsIndex;
+
+        auto get = [&](I idx) -> cv::Point { return pts[std::to_underlying(idx)]; };
+
+        cv::Point lt = get(I::LEFT_TOP);
+        cv::Point rt = get(I::RIGHT_TOP);
+        cv::Point rb = get(I::RIGHT_BOTTOM);
+        cv::Point lb = get(I::LEFT_BOTTOM);
+
+        // 顺序：左上 → 右下 → 右上 → 左下 → 左上
+        cv::line(img, lt, rb, cv::Scalar(0, 255, 0), 2);
+        cv::line(img, rb, rt, cv::Scalar(0, 255, 0), 2);
+        cv::line(img, rt, lb, cv::Scalar(0, 255, 0), 2);
+        cv::line(img, lb, lt, cv::Scalar(0, 255, 0), 2);
+
+        cv::Point bottom_center = (lb + rb) * 0.5;
+
+        bottom_center.y += 20;
+
+        std::string text = getStringByArmorColor(color) + " " + getStringByArmorClass(number);
+
+        int font = cv::FONT_HERSHEY_SIMPLEX;
+        double scale = 1.5;
+        int thickness = 1;
+
+        int baseline = 0;
+        cv::Size text_size = cv::getTextSize(text, font, scale, thickness, &baseline);
+
+        cv::Point text_org(
+            bottom_center.x - text_size.width / 2,
+            bottom_center.y + text_size.height / 2
+        );
+
+        cv::putText(img, text, text_org, font, scale, cv::Scalar(255, 255, 255), thickness);
+    }
     Armor() = default;
 };
 struct Armors {
@@ -216,5 +274,10 @@ struct Armors {
     int id = -1;
     int frame_id = -1;
     std::vector<Armor> armors;
+    void draw(cv::Mat& img) {
+        for (auto& armor: armors) {
+            armor.draw(img);
+        }
+    }
 };
 } // namespace awakening::auto_aim

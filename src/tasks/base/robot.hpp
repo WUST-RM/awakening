@@ -1,6 +1,5 @@
 #pragma once
 #include "angles.h"
-#include "camera.hpp"
 #include "common.hpp"
 #include "packet_typedef.hpp"
 #include "utils/tf.hpp"
@@ -9,6 +8,7 @@
 #include <opencv2/core/types.hpp>
 #include <yaml-cpp/node/parse.h>
 namespace awakening {
+enum class Frame : int { ODOM, GIMBAL_ODOM, GIMBAL, CAMERA, SHOOT };
 struct LinkBuffer {
     TimePoseBuffer buffer;
     LinkBuffer(size_t size = 1024): buffer(size) {}

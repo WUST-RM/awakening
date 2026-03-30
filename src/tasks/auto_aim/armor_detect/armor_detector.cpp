@@ -4,6 +4,7 @@
 #include "utils/logger.hpp"
 #include "utils/net_detector/net_detector_base.hpp"
 #include "utils/net_detector/openvino/net_detector_openvino.hpp"
+#include <fstream>
 #include <memory>
 #include <opencv2/highgui.hpp>
 #include <optional>
@@ -52,8 +53,7 @@ struct ArmorDetector::Impl {
 
         if (backend == OPENVINO) {
             const double scale = armor_infer_->useNorm() ? 255.0f : 1.0f;
-            auto format = armor_infer_->inputRGB() ? utils::NetDetectorBase::PixelFormat::RGB
-                                                   : utils::NetDetectorBase::PixelFormat::BGR;
+            auto format = armor_infer_->targetFormat();
             net_detector_ = std::make_unique<utils::NetDetectorOpenVINO>(
                 config["net_detector"][OPENVINO],
                 format,
@@ -79,7 +79,7 @@ struct ArmorDetector::Impl {
             return false;
         }
 
-        auto key_points = armor.net->key_points.points;
+        auto key_points = armor.net.key_points.points;
 
         const cv::Point2f& rb =
             key_points[std::to_underlying(ArmorKeyPointsIndex::RIGHT_BOTTOM)].value();
@@ -126,20 +126,14 @@ struct ArmorDetector::Impl {
         armor.number_classifier->number_img = std::move(number_image);
         return true;
     }
-    void classifyColor(
-        const cv::Mat& src,
-        Armor& armor,
-        utils::NetDetectorBase::PixelFormat pixel_format
-    ) const noexcept {
+    void classifyColor(const cv::Mat& src, Armor& armor, PixelFormat pixel_format) const noexcept {
         constexpr float light_width = 1.0f;
         constexpr float light_height = 5.0f;
         if (src.empty() || src.cols < 10 || src.rows < 10 || !params_.color_classifier_params) {
             AWAKENING_ERROR("[classifyColor] input src is empty or too small!");
             return;
         }
-        auto& key_points = armor.net->key_points.points;
-
-        // --------- 安全取点 ----------
+        auto& key_points = armor.net.key_points.points;
         auto getPt = [&](ArmorKeyPointsIndex idx) -> const cv::Point2f* {
             auto& opt = key_points[std::to_underlying(idx)];
             return opt ? &(*opt) : nullptr;
@@ -179,11 +173,16 @@ struct ArmorDetector::Impl {
         armor.color_classifier = Armor::ColorClassifierCtx();
         armor.color_classifier->lights_box = lights_box;
         auto extractRotatedROI = [](const cv::Mat& src, const cv::RotatedRect& rect) {
-            cv::Mat M, rotated, cropped;
-            M = cv::getRotationMatrix2D(rect.center, rect.angle, 1.0);
-            cv::warpAffine(src, rotated, M, src.size(), cv::INTER_LINEAR);
-            cv::getRectSubPix(rotated, rect.size, rect.center, cropped);
-            return cropped;
+            // cv::Mat M, rotated, cropped;
+            // M = cv::getRotationMatrix2D(rect.center, rect.angle, 1.0);
+            // cv::warpAffine(src, rotated, M, src.size(), cv::INTER_LINEAR);
+            // cv::getRectSubPix(rotated, rect.size, rect.center, cropped);
+            //  return cropped;
+            cv::Rect bbox = rect.boundingRect();
+            bbox &= cv::Rect(0, 0, src.cols, src.rows);
+            if (bbox.width <= 0 || bbox.height <= 0)
+                return cv::Mat();
+            return src(bbox);
         };
 
         auto judgeColor = [&](const cv::Mat& roi) {
@@ -191,19 +190,17 @@ struct ArmorDetector::Impl {
                 return ArmorColor::NONE;
 
             cv::Scalar mean_val = cv::mean(roi);
-
             float R = 0.f, B = 0.f;
-
             switch (pixel_format) {
-                case utils::NetDetectorBase::PixelFormat::BGR:
-                    R = mean_val[0];
-                    B = mean_val[2];
-                    break;
-                case utils::NetDetectorBase::PixelFormat::RGB:
-                    B = mean_val[0];
+                case PixelFormat::BGR:
                     R = mean_val[2];
+                    B = mean_val[0];
                     break;
-                case utils::NetDetectorBase::PixelFormat::GRAY:
+                case PixelFormat::RGB:
+                    B = mean_val[2];
+                    R = mean_val[0];
+                    break;
+                case PixelFormat::GRAY:
                     return ArmorColor::NONE;
             }
 
@@ -249,7 +246,11 @@ struct ArmorDetector::Impl {
         if (class_names_.empty()) {
             throw std::runtime_error("Failed to load labels from " + label_path);
         } else {
-            AWAKENING_DEBUG("Successfully loaded {} labels from {}", class_names_.size(), label_path);
+            AWAKENING_DEBUG(
+                "Successfully loaded {} labels from {}",
+                class_names_.size(),
+                label_path
+            );
         }
         number_net_.reset();
     }
@@ -314,20 +315,8 @@ struct ArmorDetector::Impl {
         const auto roi = src_img(frame.expanded);
         cv::Mat resized_img =
             utils::letterbox(roi, transform_matrix, armor_infer_->inputW(), armor_infer_->inputH());
-        auto format = [&]() {
-            auto vl_format = frame.img_frame.pixel_format;
-            switch (vl_format) {
-                case wust_vl::video::PixelFormat::BGR:
-                    return utils::NetDetectorBase::PixelFormat::BGR;
-                case wust_vl::video::PixelFormat::RGB:
-                    return utils::NetDetectorBase::PixelFormat::RGB;
-                case wust_vl::video::PixelFormat::GRAY:
-                    return utils::NetDetectorBase::PixelFormat::GRAY;
-                default:
-                    throw std::runtime_error("Invalid pixel format");
-            }
-        };
-        auto net_output = net_detector_->detect(resized_img, format());
+
+        auto net_output = net_detector_->detect(resized_img, frame.img_frame.format);
 
         result = armor_infer_->process(net_output);
         for (auto& armor: result) {
@@ -338,7 +327,7 @@ struct ArmorDetector::Impl {
                 }
             }
             if (params_.color_classifier_params) {
-                classifyColor(resized_img, armor, format());
+                classifyColor(resized_img, armor, frame.img_frame.format);
             }
 
             armor.tidy();

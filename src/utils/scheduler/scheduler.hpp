@@ -31,7 +31,7 @@ public:
     }
 
     template<typename InputPair, typename... OutputPairs, typename Fn>
-    void register_task(std::string&& n, Fn&& fn) {
+    void register_task(std::string n, Fn&& fn) {
         auto node = TaskNode<InputPair, OutputPairs...>::create(std::forward<Fn>(fn));
         node->name = std::move(n);
 
@@ -41,14 +41,16 @@ public:
         }
 
         static_tasks_snapshot[inputs.front()].push_back(node);
+        built = false;
     }
 
     template<typename... OutputPairs>
-    [[nodiscard]] size_t register_source(std::string&& n) {
+    [[nodiscard]] size_t register_source(std::string n) {
         auto node = SourceNode<OutputPairs...>::create();
         node->name = std::move(n);
 
         source_snapshot.push_back(node);
+        built = false;
         return source_snapshot.size() - 1;
     }
 
@@ -83,7 +85,7 @@ public:
     }
 
     template<int CoreId, typename... OutputPairs, typename Fn>
-    void add_rate_source(std::string&& n, double rate, Fn&& fn) {
+    void add_rate_source(std::string n, double rate, Fn&& fn) {
         static_assert(CoreId >= 0, "CoreId must be >= 0");
 
         if (CoreId >= static_cast<int>(__hardware_concurrency)) {
@@ -140,20 +142,17 @@ public:
     }
 
     void stop() {
-        static std::once_flag flag;
-        std::call_once(flag, [this]() {
-            if (!running.exchange(false, std::memory_order_acq_rel))
-                return;
+        if (!running.exchange(false, std::memory_order_acq_rel))
+            return;
 
-            for (auto& t: rate_threads) {
-                if (t.joinable())
-                    t.request_stop();
-            }
+        for (auto& t: rate_threads) {
+            if (t.joinable())
+                t.request_stop();
+        }
 
-            rate_threads.clear();
-            arena.execute([this] { tg.wait(); });
-            AWAKENING_INFO("awakening Scheduler stopped");
-        });
+        rate_threads.clear();
+        arena.execute([this] { tg.wait(); });
+        AWAKENING_INFO("awakening Scheduler stopped");
     }
     void build() {
         if (built)

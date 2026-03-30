@@ -15,7 +15,7 @@ option(BUILD_WITH_TRT      "Enable TensorRT backend"   ON)
 option(BUILD_WITH_OPENVINO "Enable OpenVINO backend"   ON)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake)
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
+
 
 
 
@@ -27,7 +27,6 @@ find_package(Ceres REQUIRED)
 find_package(HikSDK REQUIRED)
 find_package(TBB REQUIRED)
 find_package(spdlog REQUIRED)
-find_package(wust_vl REQUIRED)
 
 set(BUILD_DEFINITIONS "")
 set(BUILD_LIBS "")
@@ -61,17 +60,16 @@ configure_file(
     ${CMAKE_BINARY_DIR}/src/param_deliver.h            
     @ONLY
 )
-add_library(${PROJECT_NAME} SHARED ${SOURCES})
-target_compile_definitions(${PROJECT_NAME} PUBLIC ${BUILD_DEFINITIONS})
-target_include_directories(${PROJECT_NAME} PUBLIC
-    ${PROJECT_SOURCE_DIR}
+include_directories(${PROJECT_NAME}_utils PUBLIC
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/3rdparty
     ${CMAKE_BINARY_DIR}/src
     ${OpenCV_INCLUDE_DIRS}
 )
-target_link_libraries(${PROJECT_NAME}
-    wust_vl::wust_vl
+file(GLOB_RECURSE UTILS_SOURCES CONFIGURE_DEPENDS src/utils/*.cpp)
+add_library(${PROJECT_NAME}_utils SHARED ${UTILS_SOURCES})
+target_compile_definitions(${PROJECT_NAME}_utils PUBLIC ${BUILD_DEFINITIONS})
+target_link_libraries(${PROJECT_NAME}_utils
     HikSDK::HikSDK
     yaml-cpp
     fmt::fmt
@@ -82,8 +80,16 @@ target_link_libraries(${PROJECT_NAME}
     ${OpenCV_LIBS}
     ${BUILD_LIBS}
 )
+file(GLOB_RECURSE AUTO_AIM_SOURCES CONFIGURE_DEPENDS src/tasks/auto_aim/*.cpp)
+add_library(${PROJECT_NAME}_auto_aim SHARED ${AUTO_AIM_SOURCES})
+target_link_libraries(${PROJECT_NAME}_auto_aim
+     ${PROJECT_NAME}_utils
+)
 function(add_common_executable exe_name src_file)
     add_executable(${exe_name} ${src_file})
-    target_link_libraries(${exe_name}  ${PROJECT_NAME})
+    target_link_libraries(${exe_name}  ${PROJECT_NAME}_utils)
 endfunction()
-add_common_executable(auto_aim runtime/auto_aim.cpp)
+add_common_executable(auto_aim src/runtime/auto_aim.cpp)
+target_link_libraries(auto_aim
+    ${PROJECT_NAME}_auto_aim
+)

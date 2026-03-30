@@ -1,5 +1,5 @@
 #pragma once
-#include "../type.hpp"
+#include "tasks/auto_aim/type.hpp"
 #include "utils/impl.hpp"
 namespace awakening::auto_aim {
 class ArmorInfer {
@@ -16,7 +16,7 @@ public:
     int inputW() const noexcept;
     int inputH() const noexcept;
     bool useNorm() const noexcept;
-    bool inputRGB() const noexcept;
+    PixelFormat targetFormat() const noexcept;
 };
 
 } // namespace awakening::auto_aim
