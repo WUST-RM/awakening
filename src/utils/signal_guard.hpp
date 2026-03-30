@@ -8,7 +8,7 @@
 #include <spdlog/spdlog.h>
 #include <thread>
 #include <vector>
-namespace awakening {
+namespace awakening::utils {
 class SignalGuard {
 public:
     static SignalGuard& instance() {
@@ -63,4 +63,4 @@ private:
     std::vector<std::function<void()>> callbacks_;
     std::mutex mtx_;
 };
-} // namespace awakening
+} // namespace awakening::utils

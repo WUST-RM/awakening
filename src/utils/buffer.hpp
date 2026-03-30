@@ -1,11 +1,14 @@
 #pragma once
 #include <array>
 #include <atomic>
+#include <condition_variable>
 #include <cstddef>
+#include <iostream>
+#include <map>
 #include <memory>
 #include <optional>
+#include <unordered_map>
 #include <vector>
-
 namespace awakening::utils {
 
 template<typename T>
@@ -20,9 +23,7 @@ public:
     void write(Fn&& fn) {
         T& buf = buffers[write_index.load(std::memory_order_relaxed)];
         fn(buf);
-        size_t prev_write = write_index.load(std::memory_order_relaxed);
-        write_index.store(back_index.load(std::memory_order_relaxed), std::memory_order_release);
-        back_index.store(prev_write, std::memory_order_relaxed);
+        rotate_write();
     }
     void write(const T& value) {
         buffers[write_index.load(std::memory_order_relaxed)] = value;
@@ -166,4 +167,62 @@ public:
 private:
     std::vector<Resource> resources_;
 };
+template<typename T>
+concept HasFrameIDAndTimestamp = requires(T a) {
+    {
+        a.id
+        } -> std::convertible_to<int>;
+};
+
+template<HasFrameIDAndTimestamp T>
+class OrderedQueue {
+public:
+    OrderedQueue(): current_id_(1) {}
+    void enqueue(T item) {
+        {
+            std::lock_guard<std::mutex> lk(mutex_);
+            if (item.id < current_id_)
+                return;
+
+            buffer_[item.id] = std::move(item);
+        }
+    }
+    std::vector<T> dequeue_batch() {
+        std::vector<T> out;
+        dequeue_batch(out);
+        return out;
+    }
+    bool dequeue_batch(std::vector<T>& out) {
+        std::lock_guard<std::mutex> lk(mutex_);
+        if (buffer_.empty())
+            return false;
+        auto it = buffer_.begin();
+        if (it->first > current_id_ + 1)
+            return false;
+        int expected = current_id_ + 1;
+        out.clear();
+        while (it != buffer_.end()) {
+            if (it->first != expected)
+                break;
+            out.emplace_back(std::move(it->second));
+            expected = it->first + 1;
+            current_id_ = it->first;
+
+            it = buffer_.erase(it);
+        }
+
+        return !out.empty();
+    }
+
+    size_t size() const {
+        std::lock_guard<std::mutex> lk(mutex_);
+        return buffer_.size();
+    }
+
+private:
+    std::map<int, T> buffer_;
+    int current_id_;
+    mutable std::mutex mutex_;
+};
+
 } // namespace awakening::utils

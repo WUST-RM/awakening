@@ -1,6 +1,8 @@
 #pragma once
+
 #include "param_deliver.h"
 #include "utils/utils.hpp"
+
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
@@ -16,13 +18,14 @@
 #include <vector>
 
 namespace awakening::logger {
+
 static constexpr auto LOG_FOLDER_PATH_ARR = utils::concat(ROOT_DIR, "/log");
 static constexpr std::string_view LOG_FOLDER_PATH(LOG_FOLDER_PATH_ARR.data());
 static constexpr auto LOG_NAME = "awakening";
-static constexpr size_t MAX_LOG_FILE_SIZE = 1024 * 1024 * 10;
-static constexpr size_t MAX_FILES = 30;
-static constexpr size_t FOLDER_WARM_SIZE = 1024 * 1024 * 500;
+static constexpr size_t MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+static constexpr size_t FOLDER_WARN_SIZE = 500 * 1024 * 1024; // 500MB
 
+// 日志宏（保持不变）
 #define AWAKENING_TRACE(...) ::awakening::logger::getLogger()->trace(__VA_ARGS__)
 #define AWAKENING_DEBUG(...) ::awakening::logger::getLogger()->debug(__VA_ARGS__)
 #define AWAKENING_INFO(...) ::awakening::logger::getLogger()->info(__VA_ARGS__)
@@ -34,23 +37,42 @@ inline std::shared_ptr<spdlog::logger>& getLogger() {
     static std::shared_ptr<spdlog::logger> logger = nullptr;
     return logger;
 }
+
+inline std::string getCurrentLogFilePath() {
+    auto& logger = getLogger();
+    if (!logger) {
+        return {};
+    }
+
+    for (const auto& sink: logger->sinks()) {
+        if (auto file_sink = std::dynamic_pointer_cast<spdlog::sinks::rotating_file_sink_mt>(sink))
+        {
+            return file_sink->filename();
+        }
+    }
+    return {};
+}
+
 inline void
-checkFolderSize(const std::string& folder_path, std::size_t warn_size = 500 * 1024 * 1024) {
-    std::size_t total_size = 0;
-    if (std::filesystem::exists(folder_path)) {
-        for (const auto& entry: std::filesystem::directory_iterator(folder_path)) {
-            if (entry.is_regular_file()) {
-                total_size += entry.file_size();
-            }
+checkFolderSize(const std::string& folder_path, std::size_t warn_size = FOLDER_WARN_SIZE) {
+    if (!std::filesystem::exists(folder_path)) {
+        return;
+    }
+
+    std::uintmax_t total_size = 0;
+    for (const auto& entry: std::filesystem::directory_iterator(folder_path)) {
+        if (entry.is_regular_file()) {
+            total_size += entry.file_size();
         }
-        if (total_size >= warn_size) {
-            AWAKENING_WARN(
-                "Total log folder {} size {} bytes exceeds warning threshold {}",
-                folder_path,
-                total_size,
-                warn_size
-            );
-        }
+    }
+
+    if (total_size >= warn_size) {
+        AWAKENING_WARN(
+            "Log folder {} size {} bytes exceeds warning threshold {} bytes",
+            folder_path,
+            total_size,
+            warn_size
+        );
     }
 }
 
@@ -58,47 +80,57 @@ inline std::string generateLogFilename(const std::string& folder_path) {
     auto now = std::chrono::system_clock::now();
     auto t = std::chrono::system_clock::to_time_t(now);
     std::tm tm {};
+
 #ifdef _WIN32
     localtime_s(&tm, &t);
 #else
     localtime_r(&t, &tm);
 #endif
+
     std::ostringstream oss;
     oss << folder_path << "/" << std::put_time(&tm, "%Y-%m-%d_%H-%M-%S") << ".log";
     return oss.str();
 }
 
 inline void init(spdlog::level::level_enum level = spdlog::level::info) {
-    if (getLogger())
+    if (getLogger()) {
         return;
+    }
 
     try {
-        // 创建日志文件夹
         if (!std::filesystem::exists(LOG_FOLDER_PATH)) {
             std::filesystem::create_directories(LOG_FOLDER_PATH);
         }
 
         std::string file_path = generateLogFilename(std::string(LOG_FOLDER_PATH));
+
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         console_sink->set_pattern("[%H:%M:%S.%e] [%^%l%$] %v");
 
         auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
             file_path,
             MAX_LOG_FILE_SIZE,
-            MAX_FILES
-        );
+            3
+        ); // max_files = 3
+
         file_sink->set_pattern("[%Y-%m-%d %H:%M:%S] [%l] %v");
 
         std::vector<spdlog::sink_ptr> sinks { console_sink, file_sink };
+
         auto logger =
             std::make_shared<spdlog::logger>(std::string(LOG_NAME), sinks.begin(), sinks.end());
 
         logger->set_level(level);
         logger->flush_on(level);
-        checkFolderSize(std::string(LOG_FOLDER_PATH), FOLDER_WARM_SIZE);
+
+        checkFolderSize(std::string(LOG_FOLDER_PATH));
 
         spdlog::register_logger(logger);
         getLogger() = logger;
+
+        logger->info("Logger initialized successfully. Current log file: {}", file_path);
+        logger->info("Log folder: {}", LOG_FOLDER_PATH);
+
     } catch (const spdlog::spdlog_ex& ex) {
         std::cerr << "Logger initialization failed: " << ex.what() << std::endl;
     }

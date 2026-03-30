@@ -55,12 +55,13 @@ struct NetDetectorTensorrt::Impl {
     }
     Impl(const YAML::Node& config, Config c) {
         config_ = c;
-        std::unique_ptr<nvinfer1::IExecutionContext> context;
+
         params_.load(config);
         buildEngine(params_.model_path);
-        context.reset(engine_->createExecutionContext());
+        auto tmp_ctx =
+            std::unique_ptr<nvinfer1::IExecutionContext>(engine_->createExecutionContext());
 
-        if (!context)
+        if (!tmp_ctx)
             throw std::runtime_error("Failed to create execution context");
         input_name_ = engine_->getIOTensorName(0);
         output_name_ = engine_->getIOTensorName(1);
@@ -68,12 +69,15 @@ struct NetDetectorTensorrt::Impl {
                                         config_.target_format == PixelFormat::GRAY ? 1 : 3,
                                         config_.target_h,
                                         config_.target_w };
-        context->setInputShape(input_name_, input_dims_);
-        if (!context->allInputShapesSpecified())
+        tmp_ctx->setInputShape(input_name_, input_dims_);
+        auto dims = tmp_ctx->getTensorShape(input_name_);
+        if (dims.nbDims == -1) {
             throw std::runtime_error("Input shape not specified");
-        input_dims_ = context->getTensorShape(input_name_);
-        output_dims_ = context->getTensorShape(output_name_);
-        context.reset();
+        }
+
+        input_dims_ = dims;
+        output_dims_ = tmp_ctx->getTensorShape(output_name_);
+        tmp_ctx.reset();
         input_sz_ = volume(input_dims_);
         output_sz_ = volume(output_dims_);
         if (params_.copy_context_num < 1) {
@@ -135,11 +139,7 @@ struct NetDetectorTensorrt::Impl {
         AWAKENING_INFO("Building TensorRT engine from ONNX...");
         auto builder = std::unique_ptr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(g_logger_));
 
-        const uint32_t flags =
-            1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
-
-        auto network =
-            std::unique_ptr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(flags));
+        auto network = std::unique_ptr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(0));
 
         auto parser =
             std::unique_ptr<nvonnxparser::IParser>(nvonnxparser::createParser(*network, g_logger_));
@@ -154,17 +154,23 @@ struct NetDetectorTensorrt::Impl {
         }
 
         auto config = std::unique_ptr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
-
-        if (builder->platformHasFastFp16()) {
-            AWAKENING_INFO("[TensorRT] FP16 supported, enabling.");
-            config->setFlag(nvinfer1::BuilderFlag::kFP16);
-        } else {
-            AWAKENING_INFO("[TensorRT] FP16 not supported, using FP32.");
-        }
-
+        config->setFlag(nvinfer1::BuilderFlag::kFP16);
+        config->setMemoryPoolLimit(nvinfer1::MemoryPoolType::kWORKSPACE, 1ULL << 30);
         auto serialized = std::unique_ptr<nvinfer1::IHostMemory>(
             builder->buildSerializedNetwork(*network, *config)
         );
+        auto profile = builder->createOptimizationProfile();
+
+        int c = config_.target_format == PixelFormat::GRAY ? 1 : 3;
+        nvinfer1::Dims4 dims { 1, c, config_.target_h, config_.target_w };
+
+        const char* input_name = network->getInput(0)->getName();
+
+        profile->setDimensions(input_name, nvinfer1::OptProfileSelector::kMIN, dims);
+        profile->setDimensions(input_name, nvinfer1::OptProfileSelector::kOPT, dims);
+        profile->setDimensions(input_name, nvinfer1::OptProfileSelector::kMAX, dims);
+
+        config->addOptimizationProfile(profile);
 
         engine_.reset(runtime_->deserializeCudaEngine(serialized->data(), serialized->size()));
 
@@ -183,7 +189,7 @@ struct NetDetectorTensorrt::Impl {
         }
         OutPut output;
         const float* cpu_blob_ptr;
-        if (!params_.use_cuda_preproces) { // 最大化ctx利用率,该部分不需要ctx则暂时不请求ctx
+        if (!params_.use_cuda_preproces) { // 最大化ctx利用率,该部分不需要ctx则暂时不请求c
             output.resized_img =
                 utils::letterbox(img, output.transform_matrix, config_.target_w, config_.target_h);
             auto swap_rb = format != config_.target_format;
