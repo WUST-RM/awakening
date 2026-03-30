@@ -106,10 +106,10 @@ struct NetDetectorOpenVINO::Impl {
             };
         }
     } params_;
-    Impl(const YAML::Node& config, PixelFormat target_format, double preprocess_scale) {
+
+    Impl(const YAML::Node& config, Config c) {
         params_.load(config);
-        target_format_ = target_format;
-        preprocess_scale_ = preprocess_scale;
+        config_ = c;
         init();
     }
     void init() {
@@ -146,8 +146,8 @@ struct NetDetectorOpenVINO::Impl {
         ppp.input()
             .preprocess()
             .convert_element_type(ov::element::f32)
-            .scale(preprocess_scale_)
-            .convert_color(toColor(target_format_));
+            .scale(config_.preprocess_scale)
+            .convert_color(toColor(config_.target_format));
         ppp.input().model().set_layout("NCHW");
         ppp.output().tensor().set_element_type(ov::element::f32);
 
@@ -185,7 +185,7 @@ struct NetDetectorOpenVINO::Impl {
         return infer_request->get_output_tensor();
     }
 
-    cv::Mat detect(const cv::Mat& img, PixelFormat format) noexcept {
+    OutPut detect(const cv::Mat& img, PixelFormat format) noexcept {
         if (resetting_ || img.empty()) {
             return {};
         }
@@ -194,26 +194,26 @@ struct NetDetectorOpenVINO::Impl {
             input_format_ = format;
             init();
         }
-
+        OutPut output;
+        output.resized_img =
+            utils::letterbox(img, output.transform_matrix, config_.target_w, config_.target_h);
         const auto input = compiled_model_->input();
-        ov::Tensor input_tensor(input.get_element_type(), input.get_shape(), img.data);
+        ov::Tensor input_tensor(
+            input.get_element_type(),
+            input.get_shape(),
+            output.resized_img.data
+        );
 
         const auto output_tensor = infer_thread_local(input_tensor);
         const auto& shape = output_tensor.get_shape();
 
         auto ptr = output_tensor.data<float>();
 
-        cv::Mat output;
-
         if (shape.size() == 3) {
-            output = cv::Mat(shape[1], shape[2], CV_32F);
+            output.output = cv::Mat(shape[1], shape[2], CV_32F, ptr).clone();
         } else if (shape.size() == 4) {
-            output = cv::Mat(shape[2], shape[3], CV_32F);
-        } else {
-            return {};
+            output.output = cv::Mat(shape[2], shape[3], CV_32F, ptr).clone();
         }
-
-        std::memcpy(output.data, ptr, sizeof(float) * output.total());
 
         return output;
     }
@@ -222,20 +222,16 @@ struct NetDetectorOpenVINO::Impl {
     std::unique_ptr<ov::CompiledModel> compiled_model_;
     std::shared_ptr<ov::Model> model_;
     PixelFormat input_format_ = PixelFormat::BGR;
-    PixelFormat target_format_ = PixelFormat::BGR;
-    double preprocess_scale_ = 1.0;
+    Config config_;
 };
-NetDetectorOpenVINO::NetDetectorOpenVINO(
-    const YAML::Node& config,
-    PixelFormat target_format,
-    double preprocess_scale
-) {
-    _impl = std::make_unique<NetDetectorOpenVINO::Impl>(config, target_format, preprocess_scale);
+NetDetectorOpenVINO::NetDetectorOpenVINO(const YAML::Node& config, Config c) {
+    _impl = std::make_unique<NetDetectorOpenVINO::Impl>(config, c);
 }
 NetDetectorOpenVINO::~NetDetectorOpenVINO() noexcept {
     _impl.reset();
 }
-cv::Mat NetDetectorOpenVINO::detect(const cv::Mat& img, PixelFormat format) noexcept {
+NetDetectorOpenVINO::OutPut
+NetDetectorOpenVINO::detect(const cv::Mat& img, PixelFormat format) noexcept {
     return _impl->detect(img, format);
 }
 } // namespace awakening::utils

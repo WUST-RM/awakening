@@ -75,14 +75,12 @@ void HikCamera::restart() {
     return;
 }
 ImageFrame HikCamera::toImageFrame(Frame& f) {
-    ImageFrame img_frame;
-    img_frame.timestamp = f.timestamp;
-
+    ImageFrame img_frame {
+        .format = target_format_,
+        .timestamp = f.timestamp,
+    };
     const auto& info = f.out_frame.stFrameInfo;
-    int width = info.nWidth;
-    int height = info.nHeight;
-    uint8_t* buf = f.out_frame.pBufAddr;
-    cv::Mat src(cv::Size(width, height), CV_8U, buf);
+    cv::Mat src(cv::Size(info.nWidth, info.nHeight), CV_8U, f.out_frame.pBufAddr);
     const auto pixel_type = info.enPixelType;
     const auto& ref_cvt = getCvtMap();
     int cvt_code = ref_cvt.at(pixel_type);

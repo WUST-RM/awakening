@@ -47,12 +47,12 @@ if(BUILD_WITH_TRT)
     set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
     set(CMAKE_CUDA_ARCHITECTURES 86)
     enable_language(CUDA)
-    set(CMAKE_CUDA_STANDARD 14)
+    set(CMAKE_CUDA_STANDARD 20)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
     set(CMAKE_CUDA_COMPILER_LAUNCHER ccache)
-    add_subdirectory(${CMAKE_SOURCE_DIR}/cuda_infer ${CMAKE_BINARY_DIR}/cuda_infer_build)
+
     list(APPEND BUILD_DEFINITIONS USE_TRT)
-    list(APPEND BUILD_LIBS TensorRT::TensorRT TensorRT::nvonnxparser CUDA::cudart cuda_infer)
+    list(APPEND BUILD_LIBS TensorRT::TensorRT TensorRT::nvonnxparser CUDA::cudart)
 endif()
 
 configure_file(
@@ -67,6 +67,10 @@ include_directories(${PROJECT_NAME}_utils PUBLIC
     ${OpenCV_INCLUDE_DIRS}
 )
 file(GLOB_RECURSE UTILS_SOURCES CONFIGURE_DEPENDS src/utils/*.cpp)
+if(BUILD_WITH_TRT)
+    file(GLOB_RECURSE UTILS_CUDA_SOURCES CONFIGURE_DEPENDS src/utils/*.cu)
+    list(APPEND UTILS_SOURCES ${UTILS_CUDA_SOURCES})
+endif()
 add_library(${PROJECT_NAME}_utils SHARED ${UTILS_SOURCES})
 target_compile_definitions(${PROJECT_NAME}_utils PUBLIC ${BUILD_DEFINITIONS})
 target_link_libraries(${PROJECT_NAME}_utils

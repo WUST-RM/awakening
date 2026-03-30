@@ -3,7 +3,7 @@ armor_detector:
     model_type: tup
     conf_threshold: 0.2
   net_detector:
-    backend: openvino
+    backend: tensorrt
     openvino:
       model_path: "/home/hy/awakening/model/opt-1208-001.onnx"
       device_name: "CPU"
@@ -12,6 +12,11 @@ armor_detector:
       scheduling_core_type: "PCORE_ONLY"
       model_distribution_policy: "TENSOR_PARALLEL"
       execution_mode: "PERFORMANCE"
+    tensorrt:
+      model_path: "/home/hy/awakening/model/opt-1208-001.onnx"
+      copy_context_num: 3
+      min_free_mem_ratio: 0.1
+      use_cuda_preproces: true
   number_classifier:
     enable: false
     model_path: /home/hy/awakening/model/mlp.onnx

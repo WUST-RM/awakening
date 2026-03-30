@@ -4,8 +4,9 @@
 namespace awakening::utils {
 class NetDetectorTensorrt: public NetDetectorBase {
 public:
-    NetDetectorTensorrt(const YAML::Node& config);
-    cv::Mat detect(const cv::Mat& img, PixelFormat format) noexcept override;
+    NetDetectorTensorrt(const YAML::Node& config, Config c);
+    OutPut detect(const cv::Mat& img, PixelFormat format) noexcept override;
     AWAKENING_IMPL_DEFINITION(NetDetectorTensorrt)
 };
+
 } // namespace awakening::utils

@@ -1,0 +1,9 @@
+Diagnostics:
+  Suppress:
+    - drv_unknown_argument
+    - unknown-type-name
+
+CompileFlags:
+  Add: [-std=c++23, -I/usr/local/cuda/include]
+  Remove: [-forward-unknown-to-host-compiler, --generate-code=*, -Xcompiler=*]
+

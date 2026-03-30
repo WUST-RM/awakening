@@ -4,6 +4,7 @@
 #include "utils/logger.hpp"
 #include "utils/net_detector/net_detector_base.hpp"
 #include "utils/net_detector/openvino/net_detector_openvino.hpp"
+#include "utils/net_detector/tensorrt/net_detector_tensorrt.hpp"
 #include <fstream>
 #include <memory>
 #include <opencv2/highgui.hpp>
@@ -16,6 +17,7 @@
 namespace awakening::auto_aim {
 struct ArmorDetector::Impl {
     static constexpr const char* OPENVINO = "openvino";
+    static constexpr const char* TENSORRT = "tensorrt";
     struct Params {
         struct NumberClassifierParams {
             std::string model_path;
@@ -51,14 +53,23 @@ struct ArmorDetector::Impl {
         }
         armor_infer_ = ArmorInfer::create(config["armor_infer"]);
         auto backend = config["net_detector"]["backend"].as<std::string>();
-
+        const double scale = armor_infer_->useNorm() ? 255.0f : 1.0f;
+        auto format = armor_infer_->targetFormat();
+        auto net_cfg = utils::NetDetectorBase::Config {
+            .target_format = format,
+            .preprocess_scale = scale,
+            .target_w = armor_infer_->inputW(),
+            .target_h = armor_infer_->inputH(),
+        };
         if (backend == OPENVINO) {
-            const double scale = armor_infer_->useNorm() ? 255.0f : 1.0f;
-            auto format = armor_infer_->targetFormat();
             net_detector_ = std::make_unique<utils::NetDetectorOpenVINO>(
                 config["net_detector"][OPENVINO],
-                format,
-                scale
+                net_cfg
+            );
+        } else if (backend == TENSORRT) {
+            net_detector_ = std::make_unique<utils::NetDetectorTensorrt>(
+                config["net_detector"][TENSORRT],
+                net_cfg
             );
         } else {
             throw std::runtime_error("Invalid backend");
@@ -322,22 +333,18 @@ struct ArmorDetector::Impl {
 
         return true;
     }
-    
 
     std::vector<Armor> detect(const CommonFrame& frame) const {
         std::vector<Armor> result;
-        Eigen::Matrix3f transform_matrix;
         const auto& src_img = frame.img_frame.src_img;
         const auto roi = src_img(frame.expanded);
-        cv::Mat resized_img =
-            utils::letterbox(roi, transform_matrix, armor_infer_->inputW(), armor_infer_->inputH());
 
-        auto net_output = net_detector_->detect(resized_img, frame.img_frame.format);
-        result = armor_infer_->process(net_output);
+        auto net_output = net_detector_->detect(roi, frame.img_frame.format);
+        result = armor_infer_->process(net_output.output);
         if (params_.number_classifier_params) {
             std::vector<Armor*> batch_armors;
             for (auto& armor: result) {
-                bool ok = extractNumber(resized_img, armor);
+                bool ok = extractNumber(net_output.resized_img, armor);
                 if (ok) {
                     batch_armors.push_back(&armor);
                 }
@@ -347,10 +354,10 @@ struct ArmorDetector::Impl {
 
         for (auto& armor: result) {
             if (params_.color_classifier_params) {
-                classifyColor(resized_img, armor, frame.img_frame.format);
+                classifyColor(net_output.resized_img, armor, frame.img_frame.format);
             }
             armor.tidy();
-            armor.transform(transform_matrix);
+            armor.transform(net_output.transform_matrix);
             armor.addOffset(frame.offset);
         }
         return result;

@@ -69,10 +69,10 @@ int main() {
         armors.armors = armor_detector.detect(frame);
         running_count--;
         log_ctx.detect_count++;
-        auto& show = frame.img_frame.src_img;
-        armors.draw(show);
-        cv::imshow("armor_detect", show);
-        cv::waitKey(1);
+        // auto& show = frame.img_frame.src_img;
+        // armors.draw(show);
+        // cv::imshow("armor_detect", show);
+        // cv::waitKey(1);
         return std::make_tuple(std::optional<DetIo::second_type>(armors));
     });
 

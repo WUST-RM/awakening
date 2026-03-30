@@ -2,8 +2,11 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <memory>
+#include <optional>
+#include <vector>
 
-namespace awakening {
+namespace awakening::utils {
 
 template<typename T>
 struct OneBuffer {
@@ -50,4 +53,117 @@ private:
     }
 };
 
-} // namespace awakening
+template<typename T>
+class ResourcePool {
+public:
+    struct MovableAtomicBool {
+        std::atomic<bool> v;
+
+        explicit MovableAtomicBool(bool b = false) noexcept: v(b) {}
+        bool load(std::memory_order m = std::memory_order_seq_cst) const noexcept {
+            return v.load(m);
+        }
+
+        void store(bool b, std::memory_order m = std::memory_order_seq_cst) noexcept {
+            v.store(b, m);
+        }
+
+        bool compare_exchange_strong(
+            bool& expected,
+            bool desired,
+            std::memory_order success = std::memory_order_seq_cst,
+            std::memory_order failure = std::memory_order_seq_cst
+        ) noexcept {
+            return v.compare_exchange_strong(expected, desired, success, failure);
+        }
+
+        bool exchange(bool b, std::memory_order m = std::memory_order_seq_cst) noexcept {
+            return v.exchange(b, m);
+        }
+
+        // Move constructor & assignment: 拷贝内部值
+        MovableAtomicBool(MovableAtomicBool&& o) noexcept: v(o.v.load(std::memory_order_relaxed)) {}
+        MovableAtomicBool& operator=(MovableAtomicBool&& o) noexcept {
+            v.store(o.v.load(std::memory_order_relaxed), std::memory_order_relaxed);
+            return *this;
+        }
+
+        MovableAtomicBool(const MovableAtomicBool&) = delete;
+        MovableAtomicBool& operator=(const MovableAtomicBool&) = delete;
+    };
+    struct Resource {
+        T value;
+        MovableAtomicBool busy;
+    };
+
+    class Handle {
+    public:
+        Handle(Resource* r = nullptr): res_(r) {}
+
+        Handle(const Handle&) = delete;
+        Handle& operator=(const Handle&) = delete;
+
+        Handle(Handle&& other) noexcept: res_(other.res_) {
+            other.res_ = nullptr;
+        }
+
+        Handle& operator=(Handle&& other) noexcept {
+            if (this != &other) {
+                release();
+                res_ = other.res_;
+                other.res_ = nullptr;
+            }
+            return *this;
+        }
+
+        ~Handle() {
+            release();
+        }
+
+        T* operator->() {
+            return &res_->value;
+        }
+        T& operator*() {
+            return res_->value;
+        }
+
+        explicit operator bool() const {
+            return res_ != nullptr;
+        }
+
+    private:
+        void release() {
+            if (res_) {
+                res_->busy.store(false, std::memory_order_release);
+                res_ = nullptr;
+            }
+        }
+
+        Resource* res_;
+    };
+
+public:
+    ResourcePool() = default;
+
+    void addResource(T&& resource) {
+        resources_.emplace_back(Resource { std::move(resource), MovableAtomicBool(false) });
+    }
+
+    void addResource(const T& resource) {
+        resources_.emplace_back(Resource { resource, MovableAtomicBool(false) });
+    }
+
+    Handle acquire() {
+        for (auto& r: resources_) {
+            bool expected = false;
+            if (r.busy.compare_exchange_strong(expected, true, std::memory_order_acquire)) {
+                return Handle(&r);
+            }
+        }
+        return Handle(nullptr);
+    }
+
+private:
+    std::vector<Resource> resources_;
+};
+} // namespace awakening::utils
