@@ -20,7 +20,7 @@ public:
         return instance().running_.load(std::memory_order_relaxed);
     }
 
-    static void addCallback(std::function<void()> cb) {
+    static void add_callback(std::function<void()> cb) {
         std::lock_guard<std::mutex> lock(instance().mtx_);
         instance().callbacks_.push_back(std::move(cb));
     }
@@ -37,11 +37,11 @@ public:
 
 private:
     SignalGuard() {
-        std::signal(SIGINT, handleSignal);
-        std::signal(SIGTERM, handleSignal);
+        std::signal(SIGINT, handle_signal);
+        std::signal(SIGTERM, handle_signal);
     }
 
-    static void handleSignal(int signum) {
+    static void handle_signal(int signum) {
         auto& inst = instance();
 
         if (!inst.running_)

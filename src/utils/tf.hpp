@@ -5,7 +5,7 @@
 #include <mutex>
 #include <shared_mutex>
 
-namespace awakening {
+namespace awakening::utils {
 
 struct TimedPose {
     TimePoint stamp;
@@ -106,4 +106,4 @@ private:
     size_t max_size_;
 };
 
-} // namespace awakening
+} // namespace awakening::utils

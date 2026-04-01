@@ -7,7 +7,7 @@ armor_detector:
     openvino:
       model_path: "/home/hy/awakening/model/opt-1208-001.onnx"
       device_name: "CPU"
-      perf_mode: "THROUGHPUT"
+      perf_mode: "CUMULATIVE_THROUGHPUT"
       # priority: "MEDIUM"
       scheduling_core_type: "PCORE_ONLY"
       model_distribution_policy: "TENSOR_PARALLEL"

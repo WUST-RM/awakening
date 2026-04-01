@@ -57,7 +57,7 @@ struct ArmorKeyPoints2D {
     using PointT = cv::Point2f;
     using I = ArmorKeyPointsIndex;
 
-    void addOffset(const PointT& offset) noexcept {
+    void add_offset(const PointT& offset) noexcept {
         for (auto& p_opt: points) {
             if (p_opt) {
                 *p_opt += offset;
@@ -70,7 +70,7 @@ struct ArmorKeyPoints2D {
     void transform(const Eigen::Matrix<float, 3, 3>& transform_matrix) noexcept {
         for (auto& p_opt: points) {
             if (p_opt) {
-                *p_opt = utils::transformPoint2D(transform_matrix, *p_opt);
+                *p_opt = utils::transform_point2D(transform_matrix, *p_opt);
             }
         }
         full_points.reset();
@@ -102,7 +102,7 @@ struct ArmorKeyPoints2D {
 
         return *full_points;
     }
-    cv::Rect2f boundingBox() {
+    cv::Rect2f bounding_box() {
         if (!bbox.has_value()) {
             float min_x = std::numeric_limits<float>::max();
             float min_y = std::numeric_limits<float>::max();
@@ -214,11 +214,11 @@ struct Armor {
         }
         has_tidy = true;
     }
-    void addOffset(const cv::Point2f& offset) {
+    void add_offset(const cv::Point2f& offset) {
         if (!has_tidy) {
             throw std::runtime_error("addOffset called before tidy");
         }
-        key_points.addOffset(offset);
+        key_points.add_offset(offset);
     }
     void transform(const Eigen::Matrix<float, 3, 3>& transform_matrix) {
         if (!has_tidy) {
@@ -274,6 +274,7 @@ struct Armors {
     int id = -1;
     int frame_id = -1;
     std::vector<Armor> armors;
+
     void draw(cv::Mat& img) {
         for (auto& armor: armors) {
             armor.draw(img);

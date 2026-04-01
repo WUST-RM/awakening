@@ -3,7 +3,42 @@
 #include <pwd.h>
 #include <regex>
 namespace awakening::utils {
-inline std::string expandEnv(const std::string& s) {
+enum class EulerOrder { XYZ, XZY, YXZ, YZX, ZXY, ZYX };
+inline Quaternion
+eulerToQuat(double yaw, double pitch, double roll, int axis0, int axis1, int axis2) {
+    const double rz = yaw, ry = pitch, rx = roll;
+    const Eigen::Quaterniond qx(Eigen::AngleAxisd(rx, Eigen::Vector3d::UnitX()));
+    const Eigen::Quaterniond qy(Eigen::AngleAxisd(ry, Eigen::Vector3d::UnitY()));
+    const Eigen::Quaterniond qz(Eigen::AngleAxisd(rz, Eigen::Vector3d::UnitZ()));
+
+    // if (!extrinsic)
+    //     std::swap(axis0, axis2);
+    Eigen::Quaterniond q;
+
+    if (axis0 == 0 && axis1 == 1 && axis2 == 2)
+        q = qx * qy * qz;
+    else if (axis0 == 0 && axis1 == 2 && axis2 == 1)
+        q = qx * qz * qy;
+    else if (axis0 == 1 && axis1 == 0 && axis2 == 2)
+        q = qy * qx * qz;
+    else if (axis0 == 1 && axis1 == 2 && axis2 == 0)
+        q = qy * qz * qx;
+    else if (axis0 == 2 && axis1 == 0 && axis2 == 1)
+        q = qz * qx * qy;
+    else if (axis0 == 2 && axis1 == 1 && axis2 == 0)
+        q = qz * qy * qx;
+    else
+        throw std::invalid_argument("Unsupported axis order");
+
+    return q;
+}
+
+inline Mat3
+eulerToMatrix(double yaw, double pitch, double roll, int axis0, int axis1, int axis2, bool extrinsic) {
+    return eulerToQuat(yaw, pitch, roll, axis0, axis1, axis2).toRotationMatrix();
+}
+
+inline std::string expand_env(const std::string& s) {
     std::regex env_re(R"(\$\{([^}]+)\})");
     std::smatch match;
     std::string result = s;
@@ -15,7 +50,7 @@ inline std::string expandEnv(const std::string& s) {
     return result;
 }
 template<typename Func>
-void XSecOnce(Func&& func, double dt) noexcept {
+void x_sec_once(Func&& func, double dt) noexcept {
     static auto last_call = std::chrono::steady_clock::now();
 
     const auto now = std::chrono::steady_clock::now();
@@ -37,7 +72,7 @@ concept Point2DLike = requires(T p) {
     T { 0.f, 0.f };
 };
 template<Point2DLike T>
-[[nodiscard]] inline T transformPoint2D(const Eigen::Matrix3f& H, const T& p) noexcept {
+[[nodiscard]] inline T transform_point2D(const Eigen::Matrix3f& H, const T& p) noexcept {
     const Eigen::Vector3f hp { p.x, p.y, 1.f };
     const Eigen::Vector3f tp = H * hp;
     return { tp.x(), tp.y() };
@@ -48,10 +83,10 @@ inline cv::Rect2f transformRect(const Eigen::Matrix3f& H, const cv::Rect2f& rect
     cv::Point2f p3(rect.x, rect.y + rect.height);
     cv::Point2f p4(rect.x + rect.width, rect.y + rect.height);
 
-    auto tp1 = utils::transformPoint2D(H, p1);
-    auto tp2 = utils::transformPoint2D(H, p2);
-    auto tp3 = utils::transformPoint2D(H, p3);
-    auto tp4 = utils::transformPoint2D(H, p4);
+    auto tp1 = utils::transform_point2D(H, p1);
+    auto tp2 = utils::transform_point2D(H, p2);
+    auto tp3 = utils::transform_point2D(H, p3);
+    auto tp4 = utils::transform_point2D(H, p4);
 
     float min_x = std::min({ tp1.x, tp2.x, tp3.x, tp4.x });
     float min_y = std::min({ tp1.y, tp2.y, tp3.y, tp4.y });

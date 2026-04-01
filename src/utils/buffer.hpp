@@ -3,6 +3,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <deque>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -12,46 +13,33 @@
 namespace awakening::utils {
 
 template<typename T>
-struct OneBuffer {
+class OneBuffer {
 public:
-    OneBuffer() {
-        write_index.store(0, std::memory_order_relaxed);
-        read_index.store(1, std::memory_order_relaxed);
-        back_index.store(2, std::memory_order_relaxed);
-    }
     template<typename Fn>
     void write(Fn&& fn) {
-        T& buf = buffers[write_index.load(std::memory_order_relaxed)];
-        fn(buf);
-        rotate_write();
+        size_t w = write_index.load(std::memory_order_relaxed);
+
+        fn(buffers[w]);
+        ready_index.store(w, std::memory_order_release);
+        size_t next = back_index.load(std::memory_order_relaxed);
+        back_index.store(w, std::memory_order_relaxed);
+        write_index.store(next, std::memory_order_relaxed);
     }
-    void write(const T& value) {
-        buffers[write_index.load(std::memory_order_relaxed)] = value;
-        rotate_write();
+    void write(const T& data) {
+        write([&](T& data) { data = data; });
     }
 
-    void write(T&& value) {
-        buffers[write_index.load(std::memory_order_relaxed)] = std::move(value);
-        rotate_write();
-    }
     T read() const {
-        size_t idx = read_index.load(std::memory_order_acquire);
-        T val = buffers[idx];
-        read_index.store(write_index.load(std::memory_order_acquire), std::memory_order_release);
-        return val;
+        size_t r = ready_index.load(std::memory_order_acquire);
+        return buffers[r];
     }
 
 private:
     std::array<T, 3> buffers;
-    std::atomic<size_t> write_index;
-    mutable std::atomic<size_t> read_index;
-    std::atomic<size_t> back_index;
 
-    void rotate_write() {
-        size_t prevWrite = write_index.load(std::memory_order_relaxed);
-        write_index.store(back_index.load(std::memory_order_relaxed), std::memory_order_release);
-        back_index.store(prevWrite, std::memory_order_relaxed);
-    }
+    std::atomic<size_t> write_index { 0 };
+    std::atomic<size_t> back_index { 1 };
+    std::atomic<size_t> ready_index { 2 };
 };
 
 template<typename T>
@@ -81,8 +69,6 @@ public:
         bool exchange(bool b, std::memory_order m = std::memory_order_seq_cst) noexcept {
             return v.exchange(b, m);
         }
-
-        // Move constructor & assignment: 拷贝内部值
         MovableAtomicBool(MovableAtomicBool&& o) noexcept: v(o.v.load(std::memory_order_relaxed)) {}
         MovableAtomicBool& operator=(MovableAtomicBool&& o) noexcept {
             v.store(o.v.load(std::memory_order_relaxed), std::memory_order_relaxed);
@@ -168,59 +154,82 @@ private:
     std::vector<Resource> resources_;
 };
 template<typename T>
-concept HasFrameIDAndTimestamp = requires(T a) {
+concept HasFrameID = requires(T a) {
     {
         a.id
         } -> std::convertible_to<int>;
 };
 
-template<HasFrameIDAndTimestamp T>
+template<HasFrameID T>
 class OrderedQueue {
 public:
     OrderedQueue(): current_id_(1) {}
-    void enqueue(T item) {
-        {
-            std::lock_guard<std::mutex> lk(mutex_);
-            if (item.id < current_id_)
-                return;
 
-            buffer_[item.id] = std::move(item);
+    void enqueue(T item) {
+        std::lock_guard<std::mutex> lk(mutex_);
+
+        if (item.id < current_id_) {
+            return;
+        }
+
+        if (item.id == current_id_) {
+            main_queue_.emplace_back(std::move(item));
+            current_id_++;
+
+            auto it = buffer_.find(current_id_);
+            while (it != buffer_.end()) {
+                main_queue_.emplace_back(std::move(it->second));
+                buffer_.erase(it);
+                current_id_++;
+                it = buffer_.find(current_id_);
+            }
+        } else {
+            buffer_.emplace(item.id, std::move(item));
         }
     }
+
     std::vector<T> dequeue_batch() {
         std::vector<T> out;
         dequeue_batch(out);
         return out;
     }
+
     bool dequeue_batch(std::vector<T>& out) {
         std::lock_guard<std::mutex> lk(mutex_);
-        if (buffer_.empty())
-            return false;
-        auto it = buffer_.begin();
-        if (it->first > current_id_ + 1)
-            return false;
-        int expected = current_id_ + 1;
-        out.clear();
-        while (it != buffer_.end()) {
-            if (it->first != expected)
-                break;
-            out.emplace_back(std::move(it->second));
-            expected = it->first + 1;
-            current_id_ = it->first;
 
-            it = buffer_.erase(it);
+        if (main_queue_.empty())
+            return false;
+
+        out.clear();
+        out.reserve(main_queue_.size());
+
+        while (!main_queue_.empty()) {
+            out.emplace_back(std::move(main_queue_.front()));
+            main_queue_.pop_front();
         }
 
-        return !out.empty();
+        return true;
+    }
+
+    bool try_dequeue(T& item) {
+        std::lock_guard<std::mutex> lk(mutex_);
+
+        if (main_queue_.empty())
+            return false;
+
+        item = std::move(main_queue_.front());
+        main_queue_.pop_front();
+        return true;
     }
 
     size_t size() const {
         std::lock_guard<std::mutex> lk(mutex_);
-        return buffer_.size();
+        return main_queue_.size() + buffer_.size();
     }
 
 private:
-    std::map<int, T> buffer_;
+    std::deque<T> main_queue_;
+    std::unordered_map<int, T> buffer_;
     int current_id_;
     mutable std::mutex mutex_;
 };

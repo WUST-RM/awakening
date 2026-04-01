@@ -49,7 +49,7 @@ struct ArmorDetector::Impl {
     Impl(const YAML::Node& config) {
         params_.load(config);
         if (params_.number_classifier_params) {
-            initNumberClassifier();
+            init_number_classifier();
         }
         armor_infer_ = ArmorInfer::create(config["armor_infer"]);
         auto backend = config["net_detector"]["backend"].as<std::string>();
@@ -75,7 +75,7 @@ struct ArmorDetector::Impl {
             throw std::runtime_error("Invalid backend");
         }
     }
-    bool extractNumber(const cv::Mat& src, Armor& armor) const noexcept {
+    bool extract_number(const cv::Mat& src, Armor& armor) const noexcept {
         // Light length in image
         constexpr int light_length = 12;
         // Image size after warp
@@ -138,7 +138,7 @@ struct ArmorDetector::Impl {
         armor.number_classifier->number_img = std::move(number_image);
         return true;
     }
-    void classifyColor(const cv::Mat& src, Armor& armor, PixelFormat pixel_format) const noexcept {
+    void classify_color(const cv::Mat& src, Armor& armor, PixelFormat pixel_format) const noexcept {
         constexpr float light_width = 1.0f;
         constexpr float light_height = 5.0f;
         if (src.empty() || src.cols < 10 || src.rows < 10 || !params_.color_classifier_params) {
@@ -231,7 +231,7 @@ struct ArmorDetector::Impl {
         return;
     }
 
-    void initNumberClassifier() {
+    void init_number_classifier() {
         if (!params_.number_classifier_params) {
             return;
         }
@@ -266,7 +266,7 @@ struct ArmorDetector::Impl {
         }
         number_net_.reset();
     }
-    bool classifyNumberBatch(std::vector<Armor*>& armors) const noexcept {
+    bool classify_number_batch(std::vector<Armor*>& armors) const noexcept {
         static thread_local std::unique_ptr<cv::dnn::Net> thread_net;
 
         if (!thread_net) {
@@ -344,21 +344,21 @@ struct ArmorDetector::Impl {
         if (params_.number_classifier_params) {
             std::vector<Armor*> batch_armors;
             for (auto& armor: result) {
-                bool ok = extractNumber(net_output.resized_img, armor);
+                bool ok = extract_number(net_output.resized_img, armor);
                 if (ok) {
                     batch_armors.push_back(&armor);
                 }
             }
-            classifyNumberBatch(batch_armors);
+            classify_number_batch(batch_armors);
         }
 
         for (auto& armor: result) {
             if (params_.color_classifier_params) {
-                classifyColor(net_output.resized_img, armor, frame.img_frame.format);
+                classify_color(net_output.resized_img, armor, frame.img_frame.format);
             }
             armor.tidy();
             armor.transform(net_output.transform_matrix);
-            armor.addOffset(frame.offset);
+            armor.add_offset(frame.offset);
         }
         return result;
     }

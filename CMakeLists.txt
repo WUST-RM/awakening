@@ -89,6 +89,63 @@ add_library(${PROJECT_NAME}_auto_aim SHARED ${AUTO_AIM_SOURCES})
 target_link_libraries(${PROJECT_NAME}_auto_aim
      ${PROJECT_NAME}_utils
 )
+
+set(ROS2_PACKAGES
+    ament_cmake
+    rmw
+    rosidl_typesupport_cpp
+    rosidl_typesupport_interface
+    rclcpp
+    geometry_msgs
+    tf2_ros
+    tf2_geometry_msgs
+    sensor_msgs
+    visualization_msgs
+    nav_msgs
+)
+foreach(pkg IN LISTS ROS2_PACKAGES)
+    find_package(${pkg} QUIET)
+endforeach()
+
+
+set(ROS2_FULL_FOUND TRUE)
+foreach(pkg IN LISTS ROS2_PACKAGES)
+    if(NOT ${pkg}_FOUND)
+        set(ROS2_FULL_FOUND FALSE)
+        message(WARNING "ROS2 package ${pkg} not found")
+    endif()
+endforeach()
+
+if(ROS2_FULL_FOUND)
+    message(STATUS "ROS2 full environment found, compiling ROS2 targets ...")
+    list(APPEND BUILD_DEFINITIONS USE_ROS2)
+
+    set(ROS2_INCLUDES)
+    foreach(pkg IN LISTS ROS2_PACKAGES)
+        if(TARGET ${pkg}::${pkg})
+            list(APPEND ROS2_INCLUDES ${${pkg}_INCLUDE_DIRS})
+        endif()
+    endforeach()
+    include_directories(${ROS2_INCLUDES})
+    file(GLOB_RECURSE RCL_SOURCES CONFIGURE_DEPENDS src/_rcl/*.cpp)
+    add_library(
+        ${PROJECT_NAME}_rcl SHARED ${RCL_SOURCES}
+    )
+    target_link_libraries(${PROJECT_NAME}_rcl
+    ${PROJECT_NAME}_utils
+    )
+    ament_target_dependencies(${PROJECT_NAME}_rcl  ${ROS2_PACKAGES})
+    target_compile_definitions(${PROJECT_NAME}_rcl  PUBLIC ${BUILD_DEFINITIONS})
+else()
+    message(WARNING "ROS2 dependencies incomplete, skipping ROS2 targets ...")
+endif()
+
+
+
+
+
+
+
 function(add_common_executable exe_name src_file)
     add_executable(${exe_name} ${src_file})
     target_link_libraries(${exe_name}  ${PROJECT_NAME}_utils)
@@ -96,4 +153,5 @@ endfunction()
 add_common_executable(auto_aim src/runtime/auto_aim.cpp)
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_auto_aim
+    ${PROJECT_NAME}_rcl
 )

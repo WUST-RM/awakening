@@ -106,7 +106,7 @@ struct ModelTraits<Mode::AT> {
     return x >= 0 ? 1.0 / (1.0 + std::exp(-x)) : std::exp(x) / (1.0 + std::exp(x));
 }
 
-[[nodiscard]] inline float rectIoU(const cv::Rect2f& a, const cv::Rect2f& b) noexcept {
+[[nodiscard]] inline float rect_ioU(const cv::Rect2f& a, const cv::Rect2f& b) noexcept {
     const cv::Rect2f inter = a & b;
     const float inter_area = inter.area();
     const float union_area = a.area() + b.area() - inter_area;
@@ -128,7 +128,7 @@ inline void nms_merge_sorted_bboxes(
         for (int idx: out_indices) {
             Armor& b = objs[idx];
             const float iou =
-                rectIoU(a.net.key_points.boundingBox(), b.net.key_points.boundingBox());
+                rect_ioU(a.net.key_points.bounding_box(), b.net.key_points.bounding_box());
             if (std::isnan(iou) || iou > nms_threshold) {
                 keep = false;
                 if (a.number == b.number && a.color == b.color && iou > MERGE_MIN_IOU
@@ -145,7 +145,7 @@ inline void nms_merge_sorted_bboxes(
     }
 }
 
-inline std::vector<Armor> topKAndNms(std::vector<Armor>& objs) {
+inline std::vector<Armor> topk_and_nms(std::vector<Armor>& objs) {
     std::sort(objs.begin(), objs.end(), [](const Armor& a, const Armor& b) {
         return a.net.confidence > b.net.confidence;
     });
@@ -236,15 +236,15 @@ struct ArmorInfer::Impl {
 
     [[nodiscard]] std::vector<Armor> process(const cv::Mat& output_buffer) const {
         std::vector<Armor> results;
-        results = postProcess(output_buffer);
+        results = post_process(output_buffer);
         return results;
     }
-    [[nodiscard]] std::vector<Armor> postProcess(const cv::Mat& output_buffer) const {
+    [[nodiscard]] std::vector<Armor> post_process(const cv::Mat& output_buffer) const {
         if (output_buffer.empty())
             return {};
-        return postProcessTUP_impl(output_buffer);
+        return post_processTUP_impl(output_buffer);
     }
-    std::vector<Armor> postProcessTUP_impl(const cv::Mat& out) const {
+    std::vector<Armor> post_processTUP_impl(const cv::Mat& out) const {
         struct GridAndStride {
             int grid0;
             int grid1;
@@ -321,7 +321,7 @@ struct ArmorInfer::Impl {
             net.confidence = confidence;
             out_objs.push_back(std::move(obj));
         }
-        return topKAndNms(out_objs);
+        return topk_and_nms(out_objs);
     }
 
     int inputW() const noexcept {

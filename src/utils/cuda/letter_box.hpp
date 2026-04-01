@@ -10,7 +10,7 @@ public:
     using Ptr = std::shared_ptr<LetterBox>;
     LetterBox(NetDetectorBase::Config config);
     ~LetterBox() noexcept;
-    float* letterbox_pitched(
+    [[nodiscard]] float* letterbox_pitched(
         const unsigned char* input_bgr_host,
         PixelFormat pixel_format,
         int img_w,
@@ -19,7 +19,7 @@ public:
         Eigen::Matrix3f& tf_matrix,
         cudaStream_t stream
     );
-    cv::Mat tensorToMat(float* d_nchw, cudaStream_t stream) const;
+    [[nodiscard]] cv::Mat tensorToMat(float* d_nchw, cudaStream_t stream) const;
     void release();
     bool isInitialized() const {
         return d_input_bgr_ && d_nchw_ && d_input_bgr_pitched_;
