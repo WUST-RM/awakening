@@ -7,6 +7,7 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <vector>
 #include <wust_vl/common/drivers/serial_driver.hpp>
 
 namespace awakening {
@@ -102,18 +103,21 @@ struct ReceiveRobotData {
     uint32_t time_stamp;
 
     float yaw, pitch, roll;
+    float CheckSum;
     float yaw_vel, pitch_vel, roll_vel;
     float v_x, v_y, v_z;
 
     float bullet_speed;
-    uint8_t detect_color;
+    float controller_delay; //s
+    uint8_t manual_reset_count;
+    uint8_t detect_color; //0 r
 
-    static std::optional<ReceiveRobotData> create(const uint8_t* data, std::size_t len) {
-        if (len != sizeof(ReceiveRobotData) || data[0] != ID)
-            return std::nullopt;
+    static std::optional<ReceiveRobotData> create(const std::vector<uint8_t>& data) {
+        // if (data.size() != sizeof(ReceiveRobotData) || data[0] != ID)
+        //     return std::nullopt;
 
         ReceiveRobotData out;
-        std::memcpy(&out, data, sizeof(out));
+        std::memcpy(&out, data.data(), sizeof(out));
         return out;
     }
 

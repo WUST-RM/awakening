@@ -10,47 +10,52 @@
 #include <utility>
 #include <vector>
 namespace awakening::auto_aim {
-constexpr double SIMPLE_SMALL_ARMOR_WIDTH = 133.0 / 1000.0; // 135
-constexpr double SIMPLE_SMALL_ARMOR_HEIGHT = 50.0 / 1000.0; // 55
-constexpr double LARGE_ARMOR_WIDTH = 225.0 / 1000.0;
-constexpr double LARGE_ARMOR_HEIGHT = 50.0 / 1000.0; // 55
-enum class ArmorColor : int { BLUE = 0, RED, NONE, PURPLE };
+constexpr double FIFTTEN_DEGREE_RAD = 15 * CV_PI / 180;
 enum class ArmorClass : int { SENTRY = 0, NO1, NO2, NO3, NO4, NO5, OUTPOST, BASE, UNKNOWN };
-constexpr int getArmorNumByArmorClass(const ArmorClass& armor_class) {
-    constexpr std::array details { 4, 4, 4, 4, 4, 4, 3, 4, 4 };
-    return details[std::to_underlying(armor_class)];
-}
-inline std::string getStringByArmorColor(ArmorColor armor_class) {
-    constexpr const char* details[] = { "blue", "red", "none", "purple" };
-    return std::string(details[std::to_underlying(armor_class)]);
-}
+enum class ArmorType : int { SimpleSmall, Large };
+template<ArmorType T>
+struct ArmorTypeTraits; // declare
+template<>
+struct ArmorTypeTraits<ArmorType::SimpleSmall> {
+    static constexpr double WIDTH = 133.0 / 1000.0;
+    static constexpr double HEIGHT = 50.0 / 1000.0;
+};
+template<>
+struct ArmorTypeTraits<ArmorType::Large> {
+    static constexpr double WIDTH = 225.0 / 1000.0;
+    static constexpr double HEIGHT = 50.0 / 1000.0;
+};
+template<typename PointT, ArmorType T>
+struct ArmorKeyPoint3D {
+    static constexpr double W = ArmorTypeTraits<T>::WIDTH;
+    static constexpr double H = ArmorTypeTraits<T>::HEIGHT;
+    static std::vector<PointT> build() {
+        return {
 
-inline std::string getStringByArmorClass(ArmorClass armor_class) {
-    constexpr const char* details[] = { "sentry", "no1",     "no2",  "no3",    "no4",
-                                        "no5",    "outpost", "base", "unknown" };
-    return std::string(details[std::to_underlying(armor_class)]);
-}
-
+            PointT(0, W / 2, H / 2), // 左上
+            PointT(0, W / 2, -H / 2), // 左下
+            PointT(0, -W / 2, -H / 2), // 右下
+            PointT(0, -W / 2, H / 2), // 右上
+            // PointT(0, W / 2, 0),
+            // PointT(0, -W / 2, 0),
+        };
+    }
+};
 enum class ArmorKeyPointsIndex : int {
-    RIGHT_BOTTOM,
-    RIGHT_TOP,
     LEFT_TOP,
     LEFT_BOTTOM,
-    LEFT_MID,
-    RIGHT_MID,
+    RIGHT_BOTTOM,
+    RIGHT_TOP,
+    // LEFT_MID,
+    // RIGHT_MID,
     N
 };
-inline std::string getStringByArmorKeyPointsIndex(int index) {
-    constexpr const char* details[] = { "right_bottom", "right_top", "left_top",
-                                        "left_bottom",  "left_mid",  "right_mid" };
-    return std::string(details[index]);
-}
 namespace armor_keypoints {
     using I = ArmorKeyPointsIndex;
     constexpr std::array sys_pairs = {
         std::pair { std::to_underlying(I::RIGHT_BOTTOM), std::to_underlying(I::LEFT_BOTTOM) },
-        std::pair { std::to_underlying(I::RIGHT_MID), std::to_underlying(I::LEFT_MID) },
-        std::pair { std::to_underlying(I::RIGHT_MID), std::to_underlying(I::LEFT_TOP) }
+        // std::pair { std::to_underlying(I::RIGHT_MID), std::to_underlying(I::LEFT_MID) },
+        std::pair { std::to_underlying(I::RIGHT_TOP), std::to_underlying(I::LEFT_TOP) }
     };
 } // namespace armor_keypoints
 struct ArmorKeyPoints2D {
@@ -63,6 +68,8 @@ struct ArmorKeyPoints2D {
                 *p_opt += offset;
             }
         }
+        // compute_mid(I::LEFT_MID, I::LEFT_TOP, I::LEFT_BOTTOM);
+        // compute_mid(I::RIGHT_MID, I::RIGHT_TOP, I::RIGHT_BOTTOM);
         full_points.reset();
         bbox.reset();
     }
@@ -73,24 +80,21 @@ struct ArmorKeyPoints2D {
                 *p_opt = utils::transform_point2D(transform_matrix, *p_opt);
             }
         }
+        // compute_mid(I::LEFT_MID, I::LEFT_TOP, I::LEFT_BOTTOM);
+        // compute_mid(I::RIGHT_MID, I::RIGHT_TOP, I::RIGHT_BOTTOM);
         full_points.reset();
         bbox.reset();
     }
+    void compute_mid(I mid, I top, I bottom) {
+        auto& mid_opt = points[std::to_underlying(mid)];
+        mid_opt = (*points[std::to_underlying(top)] + *points[std::to_underlying(bottom)]) / 2.f;
+    };
 
-    std::array<PointT, 6>& landmarks() {
-        auto computeMid = [&](I mid, I top, I bottom) {
-            auto& mid_opt = points[std::to_underlying(mid)];
-            if (!mid_opt) {
-                mid_opt =
-                    (*points[std::to_underlying(top)] + *points[std::to_underlying(bottom)]) / 2.f;
-            }
-        };
-
-        computeMid(I::RIGHT_MID, I::RIGHT_TOP, I::RIGHT_BOTTOM);
-        computeMid(I::LEFT_MID, I::LEFT_TOP, I::LEFT_BOTTOM);
-
+    std::array<PointT, std::to_underlying(I::N)>& landmarks() {
         if (!full_points) {
-            std::array<PointT, 6> tmp {};
+            // compute_mid(I::LEFT_MID, I::LEFT_TOP, I::LEFT_BOTTOM);
+            // compute_mid(I::RIGHT_MID, I::RIGHT_TOP, I::RIGHT_BOTTOM);
+            std::array<PointT, std::to_underlying(I::N)> tmp {};
             for (size_t i = 0; i < points.size(); ++i) {
                 if (!points[i]) {
                     throw std::runtime_error("ArmorKeyPoints2D::points(): point not set");
@@ -131,32 +135,48 @@ struct ArmorKeyPoints2D {
         return bbox.value();
     }
 
-    std::array<std::optional<PointT>, 6> points {};
+    std::array<std::optional<PointT>, std::to_underlying(I::N)> points {};
 
 private:
-    std::optional<std::array<PointT, 6>> full_points;
+    std::optional<std::array<PointT, std::to_underlying(I::N)>> full_points;
     std::optional<cv::Rect2f> bbox;
 };
+inline ArmorType getArmorTypebyArmorClass(ArmorClass armor_class) {
+    bool is_large = armor_class == ArmorClass::NO1;
+    return is_large ? ArmorType::Large : ArmorType::SimpleSmall;
+}
+template<typename PointT>
+inline std::vector<PointT> getArmorKeyPoints3D(ArmorClass armor_class) {
+    auto armor_type = getArmorTypebyArmorClass(armor_class);
+    if (armor_type == ArmorType::Large) {
+        return ArmorKeyPoint3D<PointT, ArmorType::Large>::build();
+    } else {
+        return ArmorKeyPoint3D<PointT, ArmorType::SimpleSmall>::build();
+    }
+}
+enum class ArmorColor : int { BLUE = 0, RED, NONE, PURPLE };
 
-template<typename PointT, double W, double H>
-struct ArmorKeyPoint3D {
-    using I = ArmorKeyPointsIndex;
-    static constexpr std::array points = {
+constexpr int getArmorNumByArmorClass(const ArmorClass& armor_class) {
+    constexpr std::array details { 4, 4, 4, 4, 4, 4, 3, 4, 4 };
+    return details[std::to_underlying(armor_class)];
+}
+inline std::string getStringByArmorColor(ArmorColor armor_class) {
+    constexpr const char* details[] = { "blue", "red", "none", "purple" };
+    return std::string(details[std::to_underlying(armor_class)]);
+}
 
-        PointT(0, -W / 2, H / 2), // 左上
+inline std::string getStringByArmorClass(ArmorClass armor_class) {
+    constexpr const char* details[] = { "sentry", "no1",     "no2",  "no3",    "no4",
+                                        "no5",    "outpost", "base", "unknown" };
+    return std::string(details[std::to_underlying(armor_class)]);
+}
 
-        PointT(0, -W / 2, -H / 2), // 左下
+inline std::string getStringByArmorKeyPointsIndex(int index) {
+    constexpr const char* details[] = { "right_bottom", "right_top", "left_top",
+                                        "left_bottom",  "left_mid",  "right_mid" };
+    return std::string(details[index]);
+}
 
-        PointT(0, W / 2, -H / 2), // 右下
-
-        PointT(0, W / 2, H / 2), // 右上
-
-        PointT(0, -W / 2, 0.0), // 左中
-
-        PointT(0, W / 2, 0.0), // 右中
-
-    };
-};
 struct Armor {
     ArmorColor color = ArmorColor::NONE;
     ArmorClass number = ArmorClass::UNKNOWN;
@@ -169,7 +189,9 @@ struct Armor {
         ArmorColor color = ArmorColor::NONE;
         ArmorClass number = ArmorClass::UNKNOWN;
         ArmorKeyPoints2D key_points;
-        std::vector<std::array<std::optional<cv::Point2f>, 6>> tmp_points;
+        std::vector<
+            std::array<std::optional<cv::Point2f>, std::to_underlying(ArmorKeyPointsIndex::N)>>
+            tmp_points;
     };
     NetCtx net;
     struct NumberClassifierCtx {

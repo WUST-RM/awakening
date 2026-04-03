@@ -1,10 +1,11 @@
 #include "armor_infer.hpp"
 #include "tasks/auto_aim/type.hpp"
 #include "utils/common/image.hpp"
+#include <cstddef>
 #include <memory>
 
 namespace awakening::auto_aim {
-static constexpr float MERGE_CONF_ERROR = 0.15f;
+static constexpr float MERGE_CONF_ERROR = 0.95f;
 static constexpr float MERGE_MIN_IOU = 0.9f;
 static constexpr float NMS_THRESHOLD = 0.35;
 static constexpr int TOP_K = 128;
@@ -163,25 +164,27 @@ inline std::vector<Armor> topk_and_nms(std::vector<Armor>& objs) {
         result.push_back(std::move(objs[indices[i]]));
         auto& ro = result.back();
         if (ro.net.tmp_points.size() >= 1) {
-            std::array<cv::Point2f, 6> accum {};
-            std::array<int, 6> count {};
+            constexpr size_t N = std::to_underlying(ArmorKeyPointsIndex::N);
+            std::array<cv::Point2f, N> accum {};
+            std::array<int, N> count {};
             const auto& base_pts_opt = ro.net.key_points.points;
-            for (size_t k = 0; k < 6; ++k) {
+            for (size_t k = 0; k < N; ++k) {
                 if (base_pts_opt[k]) {
                     accum[k] += *base_pts_opt[k];
                     count[k]++;
                 }
             }
             for (const auto& pts_opt: ro.net.tmp_points) {
-                for (size_t k = 0; k < 6; ++k) {
+                for (size_t k = 0; k < N; ++k) {
                     if (pts_opt[k]) {
                         accum[k] += *pts_opt[k];
                         count[k]++;
                     }
                 }
             }
-            std::array<std::optional<cv::Point2f>, 6> final_pts {};
-            for (size_t k = 0; k < 6; ++k) {
+            std::array<std::optional<cv::Point2f>, std::to_underlying(ArmorKeyPointsIndex::N)>
+                final_pts {};
+            for (size_t k = 0; k < std::to_underlying(ArmorKeyPointsIndex::N); ++k) {
                 if (count[k] > 0) {
                     if (base_pts_opt[k]) {
                         final_pts[k] = accum[k] / static_cast<float>(count[k]);

@@ -209,7 +209,7 @@ struct NetDetectorTensorrt::Impl {
             }
             auto& ctx = *r;
             if (params_.use_cuda_preproces) {
-                ctx.device_buffers[input_idx_] = ctx.letter_box->letterbox_pitched(
+                auto tensor = ctx.letter_box->letterbox_pitched(
                     img.data,
                     format,
                     img.cols,
@@ -218,6 +218,10 @@ struct NetDetectorTensorrt::Impl {
                     output.transform_matrix,
                     ctx.stream
                 );
+                if (!tensor) {
+                    return output;
+                }
+                ctx.device_buffers[input_idx_] = tensor;
                 output.resized_img = ctx.letter_box->tensorToMat(
                     static_cast<float*>(ctx.device_buffers[input_idx_]),
                     ctx.stream

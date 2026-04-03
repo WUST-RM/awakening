@@ -33,6 +33,7 @@ public:
         return std::make_shared<RobotTF>();
     }
 
+    // 添加父子边
     void add_edge(FrameEnum parent, FrameEnum child) {
         edges_.push_back({ parent, child });
         adjacency_[parent].push_back(child);
@@ -40,17 +41,31 @@ public:
         directed_edge_[size_t(parent)][size_t(child)] = true;
     }
 
-    void push(FrameEnum parent, FrameEnum child, const TimePoint& t, const ISO3& pose) {
-        buffers_[size_t(parent)][size_t(child)].buffer.push(t, pose);
+    // 推送 pose: child 在 parent 中的位姿
+    bool push(FrameEnum parent, FrameEnum child, const TimePoint& t, const ISO3& pose_in_parent) {
+        if (!has_direct_edge(parent, child)) {
+            if constexpr (Static) {
+                throw std::runtime_error(
+                    "Attempt to push pose for undefined edge " + std::to_string(size_t(parent))
+                    + " -> " + std::to_string(size_t(child))
+                );
+            } else {
+                return false;
+            }
+        }
+
+        buffers_[size_t(parent)][size_t(child)].buffer.push(t, pose_in_parent);
+        return true;
     }
 
-    ISO3 get(FrameEnum from, FrameEnum to, const TimePoint& t) const {
-        auto path = find_path(from, to);
+    // 查询 pose: child 在 parent 中的位姿
+    ISO3 pose_in(FrameEnum child, FrameEnum parent, const TimePoint& t) const {
+        auto path = find_path(parent, child); // 查 parent->child 的路径
         if (!path) {
             if constexpr (Static) {
                 throw std::runtime_error(
-                    "No path found from " + std::to_string(size_t(from)) + " to "
-                    + std::to_string(size_t(to))
+                    "No path from " + std::to_string(size_t(parent)) + " to "
+                    + std::to_string(size_t(child))
                 );
             } else {
                 return ISO3::Identity();
@@ -87,8 +102,8 @@ public:
         return edges_;
     }
 
-    bool has_path(FrameEnum from, FrameEnum to) const {
-        return find_path(from, to).has_value();
+    bool has_path(FrameEnum child, FrameEnum parent) const {
+        return find_path(parent, child).has_value();
     }
 
 private:

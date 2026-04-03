@@ -22,7 +22,7 @@ public:
         for (const auto& edge: edges) {
             auto parent = edge.parent;
             auto child = edge.child;
-            ISO3 pose = r_tf.get(
+            ISO3 pose = r_tf.pose_in(
                 static_cast<FrameEnum>(child),
                 static_cast<FrameEnum>(parent),
                 Clock::now()

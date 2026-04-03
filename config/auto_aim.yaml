@@ -18,9 +18,32 @@ armor_detector:
       min_free_mem_ratio: 0.1
       use_cuda_preproces: true
   number_classifier:
-    enable: false
+    enable: true
     model_path: /home/hy/awakening/model/mlp.onnx
     label_path: /home/hy/awakening/model/label.txt
   color_classifier:
     enable: true
     diff_threshold: 20.0
+
+armor_tracker:
+  lost_time_thres: 2.0
+  tracking_thres: 10
+  max_yaw_diff_deg: 60.0
+  max_dis_diff: 3.0
+  match_gate: 15
+  qxyz_common: [200.0, 200.0, 1.0]
+  qyaw_common: 100.0
+  qxyz_output: [10.0, 10.0, 0.5]
+  qyaw_output: 0.01
+  q_r: 0.0000001
+  q_l: 0.0000001
+  q_h: 0.0000001
+  q_outpost_dz: 0.5
+  yp_r: 2e-3
+  dis_r_front: 0.5
+  dis_r_side: 2.5
+  dis2_r_ratio: 0.1
+  yaw_r_base_front: 0.2
+  yaw_r_base_side: 0.06
+  yaw_r_log_ratio: 0.02
+  esekf_iter_num: 5

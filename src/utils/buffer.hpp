@@ -13,33 +13,41 @@
 namespace awakening::utils {
 
 template<typename T>
-class OneBuffer {
+class SWMR {
 public:
-    template<typename Fn>
-    void write(Fn&& fn) {
-        size_t w = write_index.load(std::memory_order_relaxed);
+    SWMR() = default;
 
-        fn(buffers[w]);
-        ready_index.store(w, std::memory_order_release);
-        size_t next = back_index.load(std::memory_order_relaxed);
-        back_index.store(w, std::memory_order_relaxed);
-        write_index.store(next, std::memory_order_relaxed);
+    template<typename Fn>
+    void write_fn(Fn&& fn) {
+        const size_t w = write_index_.load(std::memory_order_relaxed);
+
+        fn(buffers_[w]);
+
+        ready_index_.store(w, std::memory_order_release);
+        const size_t next = back_index_.load(std::memory_order_relaxed);
+        back_index_.store(w, std::memory_order_relaxed);
+        write_index_.store(next, std::memory_order_relaxed);
     }
+
     void write(const T& data) {
-        write([&](T& data) { data = data; });
+        write_fn([&](T& buf) { buf = data; });
     }
 
     T read() const {
-        size_t r = ready_index.load(std::memory_order_acquire);
-        return buffers[r];
+        const size_t r = ready_index_.load(std::memory_order_acquire);
+        return buffers_[r];
+    }
+
+    const T& read_ref() const {
+        const size_t r = ready_index_.load(std::memory_order_acquire);
+        return buffers_[r];
     }
 
 private:
-    std::array<T, 3> buffers;
-
-    std::atomic<size_t> write_index { 0 };
-    std::atomic<size_t> back_index { 1 };
-    std::atomic<size_t> ready_index { 2 };
+    std::array<T, 3> buffers_;
+    alignas(64) std::atomic<size_t> write_index_ { 0 };
+    alignas(64) std::atomic<size_t> back_index_ { 1 };
+    alignas(64) std::atomic<size_t> ready_index_ { 2 };
 };
 
 template<typename T>

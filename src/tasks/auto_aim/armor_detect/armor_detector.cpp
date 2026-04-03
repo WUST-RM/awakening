@@ -325,9 +325,9 @@ struct ArmorDetector::Impl {
             armor->number_classifier->confidence = confidence;
 
             if (label >= 0 && label < (int)label_map.size()) {
-                armor->number = label_map[label];
+                armor->number_classifier->number = label_map[label];
             } else {
-                armor->number = ArmorClass::UNKNOWN;
+                armor->number_classifier->number = ArmorClass::UNKNOWN;
             }
         }
 
@@ -341,6 +341,9 @@ struct ArmorDetector::Impl {
 
         auto net_output = net_detector_->detect(roi, frame.img_frame.format);
         result = armor_infer_->process(net_output.output);
+        if (net_output.resized_img.empty()) {
+            return result;
+        }
         if (params_.number_classifier_params) {
             std::vector<Armor*> batch_armors;
             for (auto& armor: result) {
