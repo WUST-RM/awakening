@@ -245,7 +245,15 @@ struct ArmorInfer::Impl {
     [[nodiscard]] std::vector<Armor> post_process(const cv::Mat& output_buffer) const {
         if (output_buffer.empty())
             return {};
-        return post_processTUP_impl(output_buffer);
+        switch (params_.mode) {
+            case Mode::TUP:
+                return post_processTUP_impl(output_buffer);
+            case Mode::RP:
+                return {};
+            case Mode::AT:
+                return post_processAT_impl(output_buffer);
+        }
+        return {};
     }
     std::vector<Armor> post_processTUP_impl(const cv::Mat& out) const {
         struct GridAndStride {
@@ -281,6 +289,7 @@ struct ArmorInfer::Impl {
             if (confidence < params_.conf_threshold) {
                 continue;
             }
+
             const auto& gs = grid_strides[a];
             const int gx = gs.grid0, gy = gs.grid1, stride = gs.stride;
 
@@ -325,6 +334,50 @@ struct ArmorInfer::Impl {
             out_objs.push_back(std::move(obj));
         }
         return topk_and_nms(out_objs);
+    }
+    std::vector<Armor> post_processAT_impl(const cv::Mat& out) const {
+        std::vector<Armor> out_objs;
+
+        constexpr int nkpt = ModelTraits<Mode::AT>::NUM_KPTS;
+        constexpr int nk = nkpt * 2; // keypoints flattened
+        auto max_det = out.rows;
+        auto det_dim = out.cols;
+        auto output_ptr = out.ptr<float>();
+        using I = ArmorKeyPointsIndex;
+        for (int i = 0; i < max_det; ++i) {
+            const float* row = output_ptr + i * det_dim;
+            float conf = row[4];
+            if (!std::isfinite(conf) || conf < params_.conf_threshold)
+                continue;
+
+            float x1 = row[0];
+            float y1 = row[1];
+            float x2 = row[2];
+            float y2 = row[3];
+            int cls = static_cast<int>(row[5]);
+            Armor obj;
+            auto& net = obj.net;
+            net = Armor::NetCtx();
+
+            net.confidence = conf;
+            auto color_num = ModelTraits<Mode::AT>::CLASSES[cls];
+            net.color = color_num.first;
+            net.number = color_num.second;
+            auto getKeyPoints = [&](int k) {
+                float kx = row[6 + 2 * k];
+                float ky = row[6 + 2 * k + 1];
+                return cv::Point2f(kx, ky);
+            };
+            auto& key_points = net.key_points;
+            key_points.points[std::to_underlying(I::LEFT_TOP)] = getKeyPoints(0);
+            key_points.points[std::to_underlying(I::LEFT_BOTTOM)] = getKeyPoints(1);
+            key_points.points[std::to_underlying(I::RIGHT_BOTTOM)] = getKeyPoints(2);
+            key_points.points[std::to_underlying(I::RIGHT_TOP)] = getKeyPoints(3);
+
+            out_objs.emplace_back(std::move(obj));
+        }
+
+        return out_objs;
     }
 
     int inputW() const noexcept {

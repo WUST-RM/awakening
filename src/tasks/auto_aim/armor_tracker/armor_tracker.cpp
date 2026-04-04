@@ -213,7 +213,7 @@ struct ArmorTracker::Impl {
         );
         double cost = 0.0;
         for (int i = 0; i < std::to_underlying(ArmorKeyPointsIndex::N); i++) {
-            cost += cv::norm(image_points[i] - landmarks[i]);
+             cost += cv::norm(image_points[i] - landmarks[i]);
         }
         // for (auto& p: armor_keypoints::sys_pairs) {
         //     const auto mid = 0.5 * (image_points[p.first] + image_points[p.second]);
@@ -289,11 +289,9 @@ struct ArmorTracker::Impl {
         return fin_R_in_odom;
     }
     int lost_thres_;
-
     int is_none_purple_count_ = 0;
     int found_count_ = 0;
-    // ArmorTarget cur_target_;
-    // ArmorTarget pre_target_;
+
     size_t cur_target_idx_ = 0;
     size_t pre_target_idx_ = 1;
     std::array<ArmorTarget, 2> target_buf_;
@@ -315,5 +313,11 @@ void ArmorTracker::pose_solve(
 ArmorTarget
 ArmorTracker::track(Armors& armors, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom) {
     return _impl->track(armors, camera_info, camera_cv_in_odom);
+}
+int ArmorTracker::get_count() {
+    return _impl->found_count_;
+}
+void ArmorTracker::reset_count() {
+    _impl->found_count_ = 0;
 }
 } // namespace awakening::auto_aim

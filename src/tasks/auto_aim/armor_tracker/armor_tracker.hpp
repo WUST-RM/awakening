@@ -11,6 +11,8 @@ public:
     [[nodiscard]] ArmorTarget
     track(Armors& armors, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom);
     void pose_solve(Armors& armors, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom);
+    int get_count();
+    void reset_count();
     AWAKENING_IMPL_DEFINITION(ArmorTracker)
 };
 } // namespace awakening::auto_aim

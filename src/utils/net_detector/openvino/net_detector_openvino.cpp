@@ -146,7 +146,7 @@ struct NetDetectorOpenVINO::Impl {
         ppp.input()
             .preprocess()
             .convert_element_type(ov::element::f32)
-            .scale(config_.preprocess_scale)
+            .scale((1.0 / config_.preprocess_scale))
             .convert_color(toColor(config_.target_format));
         ppp.input().model().set_layout("NCHW");
         ppp.output().tensor().set_element_type(ov::element::f32);

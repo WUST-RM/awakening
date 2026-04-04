@@ -3,6 +3,7 @@
 #include "utils/utils.hpp"
 #include <array>
 #include <cstddef>
+#include <iostream>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 #include <optional>
@@ -160,11 +161,14 @@ constexpr int getArmorNumByArmorClass(const ArmorClass& armor_class) {
     constexpr std::array details { 4, 4, 4, 4, 4, 4, 3, 4, 4 };
     return details[std::to_underlying(armor_class)];
 }
-inline std::string getStringByArmorColor(ArmorColor armor_class) {
+inline std::string getStringByArmorColor(ArmorColor armor_color) {
     constexpr const char* details[] = { "blue", "red", "none", "purple" };
-    return std::string(details[std::to_underlying(armor_class)]);
+    return std::string(details[std::to_underlying(armor_color)]);
 }
-
+inline cv::Scalar getCVColorByArmorClass(ArmorColor armor_color) {
+    static  cv::Scalar details[] = { cv::Scalar(255, 0, 0), cv::Scalar(0, 0, 255), cv::Scalar(255, 255, 255), cv::Scalar(255, 0, 255) };
+    return details[std::to_underlying(armor_color)];
+}
 inline std::string getStringByArmorClass(ArmorClass armor_class) {
     constexpr const char* details[] = { "sentry", "no1",     "no2",  "no3",    "no4",
                                         "no5",    "outpost", "base", "unknown" };
@@ -263,7 +267,6 @@ struct Armor {
         cv::Point rb = get(I::RIGHT_BOTTOM);
         cv::Point lb = get(I::LEFT_BOTTOM);
 
-        // 顺序：左上 → 右下 → 右上 → 左下 → 左上
         cv::line(img, lt, rb, cv::Scalar(0, 255, 0), 2);
         cv::line(img, rb, rt, cv::Scalar(0, 255, 0), 2);
         cv::line(img, rt, lb, cv::Scalar(0, 255, 0), 2);
@@ -275,8 +278,8 @@ struct Armor {
 
         std::string text = getStringByArmorColor(color) + " " + getStringByArmorClass(number);
 
-        int font = cv::FONT_HERSHEY_SIMPLEX;
-        double scale = 1.5;
+        int font = cv::FONT_HERSHEY_COMPLEX;
+        double scale = 0.5;
         int thickness = 1;
 
         int baseline = 0;
@@ -287,7 +290,7 @@ struct Armor {
             bottom_center.y + text_size.height / 2
         );
 
-        cv::putText(img, text, text_org, font, scale, cv::Scalar(255, 255, 255), thickness);
+        cv::putText(img, text, text_org, font, scale, getCVColorByArmorClass(color), thickness);
     }
     Armor() = default;
 };

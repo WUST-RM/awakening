@@ -19,7 +19,7 @@ public:
         Eigen::Matrix3f& tf_matrix,
         cudaStream_t stream
     );
-    [[nodiscard]] cv::Mat tensorToMat(float* d_nchw, cudaStream_t stream) const;
+    [[nodiscard]] cv::Mat tensorToMat(float* d_nchw, cudaStream_t stream, bool swap_rb) const;
     void release();
     bool isInitialized() const {
         return d_input_bgr_ && d_nchw_ && d_input_bgr_pitched_;

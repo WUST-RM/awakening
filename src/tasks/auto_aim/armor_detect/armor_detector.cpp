@@ -53,7 +53,7 @@ struct ArmorDetector::Impl {
         }
         armor_infer_ = ArmorInfer::create(config["armor_infer"]);
         auto backend = config["net_detector"]["backend"].as<std::string>();
-        const double scale = armor_infer_->useNorm() ? 255.0f : 1.0f;
+        const double scale = armor_infer_->useNorm() ? 1.0 / 255.0f : 1.0f;
         auto format = armor_infer_->targetFormat();
         auto net_cfg = utils::NetDetectorBase::Config {
             .target_format = format,

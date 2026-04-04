@@ -32,8 +32,8 @@ struct CameraInfo {
         cv::Mat D(1, 5, CV_64F);
         std::memcpy(D.data, camera_d.data(), 5 * sizeof(double));
 
-        camera_matrix = K;
-        distortion_coefficients = D;
+        camera_matrix = K.clone();
+        distortion_coefficients = D.clone();
     }
 };
 } // namespace awakening

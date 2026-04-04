@@ -57,6 +57,7 @@ struct LogCtx {
     int track_count = 0;
     int solve_count = 0;
     int serial_count = 0;
+    int found_count = 0;
     double latency_ms_total = 0.0;
     void reset() {
         camera_count = 0;
@@ -64,6 +65,7 @@ struct LogCtx {
         track_count = 0;
         solve_count = 0;
         serial_count = 0;
+        found_count = 0;
         latency_ms_total = 0.0;
     }
 };
@@ -186,8 +188,6 @@ int main() {
     });
 
     s.register_task<DetIo>("tracker", [&](DetIo::second_type&& io) {
-        log_ctx.track_count++;
-
         for (const auto& armors_raw: io) {
             auto armors = armors_raw;
             armors.armors.clear();
@@ -220,17 +220,21 @@ int main() {
             )
                                   .count();
             log_ctx.latency_ms_total += latency_ms;
+            log_ctx.found_count += armor_tracker.get_count();
+            armor_tracker.reset_count();
             auto_aim_dbg.armors_buffer.write(armors);
             auto_aim_dbg.camera_cv_in_odom_buffer.write(camera_cv_in_odom);
+            log_ctx.track_count++;
         }
     });
     s.add_rate_source<0>("slover", 1000.0, [&]() { log_ctx.solve_count++; });
     s.add_rate_source<1>("logger", 1.0, [&]() {
         double avg_latency_ms = log_ctx.latency_ms_total / log_ctx.track_count;
         AWAKENING_INFO(
-            "detect: {} track: {} solve: {} serial: {} camera: {} avg_latency: {:.3} ms",
+            "detect: {} track: {} found: {} solve: {} serial: {} camera: {} avg_latency: {:.3} ms",
             log_ctx.detect_count,
             log_ctx.track_count,
+            log_ctx.found_count,
             log_ctx.solve_count,
             log_ctx.serial_count,
             log_ctx.camera_count,

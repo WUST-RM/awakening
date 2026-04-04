@@ -50,7 +50,7 @@ void LetterBox::rellocMem() {
 
     printf("Realloc memory for CudaInfer\n");
 }
-template<int PIX_PER_THREAD = 4>
+template<bool SwapRB, int PIX_PER_THREAD = 4>
 __global__ void nchw_float_to_hwc_uchar4(
     const float* __restrict__ src,
     uchar4* __restrict__ dst,
@@ -74,13 +74,16 @@ __global__ void nchw_float_to_hwc_uchar4(
             r = r < 0.f ? 0.f : (r > 255.f ? 255.f : r);
             g = g < 0.f ? 0.f : (g > 255.f ? 255.f : g);
             b = b < 0.f ? 0.f : (b > 255.f ? 255.f : b);
-
-            dst[pidx] = make_uchar4((unsigned char)b, (unsigned char)g, (unsigned char)r, 255);
+            if constexpr (SwapRB) {
+                dst[pidx] = make_uchar4((unsigned char)r, (unsigned char)g, (unsigned char)b, 255);
+            } else {
+                dst[pidx] = make_uchar4((unsigned char)b, (unsigned char)g, (unsigned char)r, 255);
+            }
         }
     }
 }
 
-cv::Mat LetterBox::tensorToMat(float* d_nchw, cudaStream_t stream) const {
+cv::Mat LetterBox::tensorToMat(float* d_nchw, cudaStream_t stream, bool swap_rb) const {
     static uchar4* d_hwc = nullptr;
     static size_t cap = 0;
     const size_t need = config_.target_w * config_.target_h * sizeof(uchar4);
@@ -93,14 +96,23 @@ cv::Mat LetterBox::tensorToMat(float* d_nchw, cudaStream_t stream) const {
     }
 
     const int GRID_SIZE = (config_.target_w * config_.target_h + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-    nchw_float_to_hwc_uchar4<PIX_PER_THREAD><<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(
-        d_nchw,
-        d_hwc,
-        config_.target_w,
-        config_.target_h,
-        config_.preprocess_scale
-    );
+    if (swap_rb) {
+        nchw_float_to_hwc_uchar4<true, PIX_PER_THREAD><<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(
+            d_nchw,
+            d_hwc,
+            config_.target_w,
+            config_.target_h,
+            config_.preprocess_scale
+        );
+    } else {
+        nchw_float_to_hwc_uchar4<false, PIX_PER_THREAD><<<GRID_SIZE, BLOCK_SIZE, 0, stream>>>(
+            d_nchw,
+            d_hwc,
+            config_.target_w,
+            config_.target_h,
+            config_.preprocess_scale
+        );
+    }
 
     cv::Mat img(config_.target_h, config_.target_w, CV_8UC4);
     cudaMemcpyAsync(img.data, d_hwc, need, cudaMemcpyDeviceToHost, stream);

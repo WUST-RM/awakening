@@ -224,7 +224,8 @@ struct NetDetectorTensorrt::Impl {
                 ctx.device_buffers[input_idx_] = tensor;
                 output.resized_img = ctx.letter_box->tensorToMat(
                     static_cast<float*>(ctx.device_buffers[input_idx_]),
-                    ctx.stream
+                    ctx.stream,
+                    format != config_.target_format
                 );
             } else {
                 TRT_CHECK(cudaMemcpyAsync(

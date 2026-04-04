@@ -30,9 +30,9 @@ armor_tracker:
   tracking_thres: 10
   max_yaw_diff_deg: 60.0
   max_dis_diff: 3.0
-  match_gate: 15
-  qxyz_common: [200.0, 200.0, 1.0]
-  qyaw_common: 100.0
+  match_gate: 10.0
+  qxyz_common: [20.0, 20.0, 1.0]
+  qyaw_common: 10.0
   qxyz_output: [10.0, 10.0, 0.5]
   qyaw_output: 0.01
   q_r: 0.0000001

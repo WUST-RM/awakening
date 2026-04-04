@@ -199,6 +199,7 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(const std::vector<Armor>& 
     }
     for (int j = 0; j < n_obs; ++j) {
         bool in_gate = false;
+        double min_d2 = std::numeric_limits<double>::max();
         for (int id = 0; id < armors_num; ++id) {
             Measure::Ctx tmp_ctx {
                 .armor_num = armors_num,
@@ -220,9 +221,12 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(const std::vector<Armor>& 
                 cost[j][id] = d2;
                 in_gate = true;
             }
+            if (d2 < min_d2) {
+                min_d2 = d2;
+            }
         }
         if (!in_gate) {
-            AWAKENING_WARN("match out of gate");
+            AWAKENING_WARN("match out of gate min d2: {}", min_d2);
         }
     }
     std::vector<bool> used_obs(n_obs, false);

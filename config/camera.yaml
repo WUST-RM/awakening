@@ -14,7 +14,7 @@ hik_camera:
   offset_y: 0
   acquisition_frame_rate_enable: true
   acquisition_frame_rate: 250
-  exposure_time: 2000
+  exposure_time: 500
   gain: 16.9
   gamma: 0.7 #Bayer用不了
   trigger_mode: Off
