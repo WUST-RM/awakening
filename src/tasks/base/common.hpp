@@ -1,6 +1,7 @@
 #pragma once
 #include "utils/common/image.hpp"
 #include "utils/common/type_common.hpp"
+#include "utils/utils.hpp"
 namespace awakening {
 static const Mat3 R_CV2PHYSICS =
     (Mat3() << 0.0, 0.0, 1.0, -1.0, -0.0, 0.0, 0.0, -1.0, 0.0).finished();
@@ -15,6 +16,16 @@ enum class EnemyColor : bool {
     RED = 0,
     BLUE = 1,
 };
+inline EnemyColor enemy_color_from_string(const std::string& str) {
+    auto key = utils::to_upper(str);
+    if (key == "RED")
+        return EnemyColor::RED;
+    else if (key == "BLUE") {
+        return EnemyColor::BLUE;
+    } else {
+        throw std::runtime_error("Invalid enemy color: " + key);
+    }
+}
 struct CameraInfo {
     cv::Mat camera_matrix;
     cv::Mat distortion_coefficients;
@@ -39,6 +50,7 @@ struct CameraInfo {
 struct AimPoint {
     ISO3 pose;
     double d_angle;
+    int frame_id;
     static AimPoint lerp(const AimPoint& a, const AimPoint& b, double t) {
         AimPoint p;
 
@@ -52,6 +64,10 @@ struct AimPoint {
         p.pose.translation() = trans;
         p.d_angle = utils::lerp_angle(a.d_angle, b.d_angle, t);
         return p;
+    }
+    void transform(const ISO3& old_in_new, int new_frame_id) {
+        pose = old_in_new * pose;
+        frame_id = new_frame_id;
     }
 };
 struct GimbalCmd {
@@ -70,6 +86,7 @@ struct GimbalCmd {
     double fly_time = 0;
     bool appear = false;
     AimPoint aim_point;
+    int select_id = 0;
     inline bool is_valid() const noexcept {
         auto bad = [](double x) { return std::isnan(x) || std::isinf(x); };
 

@@ -18,5 +18,8 @@ struct ImageFrame {
     cv::Mat src_img;
     PixelFormat format;
     TimePoint timestamp;
+    ImageFrame clone() const {
+        return ImageFrame { src_img.clone(), format, timestamp };
+    }
 };
 } // namespace awakening

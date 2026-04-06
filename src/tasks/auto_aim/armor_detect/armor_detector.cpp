@@ -21,10 +21,8 @@ struct ArmorDetector::Impl {
     struct Params {
         struct NumberClassifierParams {
             std::string model_path;
-            std::string label_path;
             void load(const YAML::Node& config) {
-                model_path = config["model_path"].as<std::string>();
-                label_path = config["label_path"].as<std::string>();
+                model_path = replace_root_dir(config["model_path"].as<std::string>());
             }
         };
         std::optional<NumberClassifierParams> number_classifier_params;
@@ -244,26 +242,6 @@ struct ArmorDetector::Impl {
         } else {
             AWAKENING_DEBUG("Successfully loaded number classifier model from {}", model_path);
         }
-
-        const std::string label_path = params_.number_classifier_params->label_path;
-        std::ifstream label_file(label_path);
-        std::string line;
-
-        class_names_.clear();
-
-        while (std::getline(label_file, line)) {
-            class_names_.push_back(line);
-        }
-
-        if (class_names_.empty()) {
-            throw std::runtime_error("Failed to load labels from " + label_path);
-        } else {
-            AWAKENING_DEBUG(
-                "Successfully loaded {} labels from {}",
-                class_names_.size(),
-                label_path
-            );
-        }
         number_net_.reset();
     }
     bool classify_number_batch(std::vector<Armor*>& armors) const noexcept {
@@ -368,7 +346,6 @@ struct ArmorDetector::Impl {
 
     utils::NetDetectorBase::Ptr net_detector_;
     ArmorInfer::Ptr armor_infer_;
-    std::vector<std::string> class_names_;
 };
 ArmorDetector::ArmorDetector(const YAML::Node& config) {
     _impl = std::make_unique<Impl>(config);

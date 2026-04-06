@@ -1,5 +1,6 @@
 #pragma once
 
+#include "tasks/base/web.hpp"
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -17,79 +18,6 @@ constexpr const char* NAV_STATE_TOPIC = "rose_state";
 constexpr const char* MODE_TOPIC = "sentry_mode";
 constexpr const char* ROBO_STATE_TOPIC = "robo_state";
 constexpr const char* GOAL_TOPIC = "rose_goal";
-
-template<typename T>
-inline auto val(const T& v) {
-    return +v;
-}
-
-struct SerialLogBuffer {
-    std::mutex mtx;
-    nlohmann::json j;
-    bool dirty = false;
-
-    std::ofstream file { "/dev/shm/serial_log.json" };
-};
-
-inline SerialLogBuffer& getLogBuffer() {
-    static SerialLogBuffer buf;
-    return buf;
-}
-
-template<typename Tag>
-inline void updateFPS(nlohmann::json& j) {
-    static int frame_count = 0;
-    static double fps = 0.0;
-    static auto last_time = std::chrono::steady_clock::now();
-
-    ++frame_count;
-
-    auto now = std::chrono::steady_clock::now();
-    double elapsed = std::chrono::duration<double>(now - last_time).count();
-
-    if (elapsed >= 1.0) {
-        fps = frame_count / elapsed;
-        frame_count = 0;
-        last_time = now;
-    }
-
-    j["fps"] = fps;
-}
-
-inline void flushSerialLog() {
-    static auto last_flush = std::chrono::steady_clock::now();
-    auto& buf = getLogBuffer();
-
-    auto now = std::chrono::steady_clock::now();
-    if (std::chrono::duration<double>(now - last_flush).count() < 0.05)
-        return;
-
-    std::lock_guard<std::mutex> lock(buf.mtx);
-
-    if (!buf.dirty || !buf.file.is_open())
-        return;
-
-    buf.file.seekp(0);
-    buf.file << buf.j.dump(2);
-    buf.file.flush();
-
-    buf.dirty = false;
-    last_flush = now;
-}
-
-template<typename Func>
-inline void writeLog(const char* key, Func&& f) {
-    auto& buf = getLogBuffer();
-
-    {
-        std::lock_guard<std::mutex> lock(buf.mtx);
-        auto& j = buf.j[key];
-        f(j);
-        buf.dirty = true;
-    }
-
-    flushSerialLog();
-}
 
 struct ReceiveRobotData {
     static constexpr uint8_t ID = 0x02;
@@ -116,10 +44,9 @@ struct ReceiveRobotData {
         return out;
     }
 
-    void updateSerialLog() {
-        writeLog("robo", [&](auto& j) {
-            updateFPS<ReceiveRobotData>(j);
-
+    void update_log() {
+        using namespace web;
+        write_log("robo", [&](auto& j) {
             j["timestamp"] = val(time_stamp);
 
             j["yaw"] = val(yaw);
@@ -163,10 +90,9 @@ struct ReceiveSentryData {
         return out;
     }
 
-    void updateSerialLog() {
-        writeLog("sentry", [&](auto& j) {
-            updateFPS<ReceiveSentryData>(j);
-
+    void update_log() {
+        using namespace web;
+        write_log("sentry", [&](auto& j) {
             j["timestamp"] = val(time_stamp);
             j["big_yaw_in_world"] = val(big_yaw_in_world);
 
@@ -199,30 +125,6 @@ struct SendRobotCmdData {
 
     uint8_t detect_color;
 
-    void updateSerialLog() {
-        writeLog("cmd", [&](auto& j) {
-            j["appear"] = val(appear);
-            j["shoot_rate"] = val(shoot_rate);
-
-            j["yaw"] = val(yaw);
-            j["pitch"] = val(pitch);
-
-            j["target_yaw"] = val(target_yaw);
-            j["target_pitch"] = val(target_pitch);
-
-            j["v_yaw"] = val(v_yaw);
-            j["v_pitch"] = val(v_pitch);
-
-            j["a_yaw"] = val(a_yaw);
-            j["a_pitch"] = val(a_pitch);
-
-            j["enable_yaw_diff"] = val(enable_yaw_diff);
-            j["enable_pitch_diff"] = val(enable_pitch_diff);
-
-            j["detect_color"] = (detect_color == 0 ? "Red" : "Blue");
-        });
-    }
-
 } __attribute__((packed));
 
 struct SendNavCmdData {
@@ -232,14 +134,6 @@ struct SendNavCmdData {
     uint32_t time_stamp;
 
     float vx, vy, wz;
-
-    void updateSerialLog() {
-        writeLog("nav_cmd", [&](auto& j) {
-            j["vx"] = val(vx);
-            j["vy"] = val(vy);
-            j["wz"] = val(wz);
-        });
-    }
 
 } __attribute__((packed));
 

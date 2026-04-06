@@ -39,7 +39,7 @@ struct VeryAimer::Impl {
             pitch_state(p) {}
         static GimbalState lerp(const GimbalState& s0, const GimbalState& s1, double a) noexcept {
             GimbalState r;
-            r.aim_id = (a > 0.5) ? s0.aim_id : s1.aim_id;
+            r.aim_id = (a < 0.5) ? s0.aim_id : s1.aim_id;
             r.yaw_state =
                 GimbalState::State { .p = utils::lerp_angle(s0.yaw_state.p, s1.yaw_state.p, a),
                                      .v = std::lerp(s0.yaw_state.v, s1.yaw_state.v, a),
@@ -59,28 +59,6 @@ struct VeryAimer::Impl {
         GimbalState::State tail;
         bool on_traj;
 
-        static inline Eigen::Matrix<double, 6, 1> solve1d_full_pivLu(
-            double p0,
-            double v0,
-            double a0,
-            double p1,
-            double v1,
-            double a1,
-            double T
-        ) noexcept {
-            Eigen::Matrix<double, 6, 6> A;
-            Eigen::Matrix<double, 6, 1> b;
-
-            double T2 = T * T, T3 = T2 * T, T4 = T3 * T, T5 = T4 * T;
-
-            // Rows: p(0)=p0, p'(0)=v0, p''(0)=a0,
-            //       p(T)=p1, p'(T)=v1, p''(T)=a1
-            A << 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 1, T, T2, T3, T4, T5, 0, 1,
-                2 * T, 3 * T2, 4 * T3, 5 * T4, 0, 0, 2, 6 * T, 12 * T2, 20 * T3;
-
-            b << p0, v0, a0, p1, v1, a1;
-            return A.fullPivLu().solve(b);
-        }
         static inline Eigen::Matrix<double, 6, 1> solve1d_closed_form(
             double p0,
             double v0,
@@ -128,10 +106,6 @@ struct VeryAimer::Impl {
             seg.c = solve1d_closed_form(s0.p, s0.v, s0.a, s1.p, s1.v, s1.a, T);
             seg.on_traj = on_traj;
             return seg;
-        }
-
-        static inline double eval_acc(const Eigen::Matrix<double, 6, 1>& c, double t) noexcept {
-            return 2 * c[2] + 6 * c[3] * t + 12 * c[4] * t * t + 20 * c[5] * t * t * t;
         }
         static inline double max_abs_acc(const Eigen::Matrix<double, 6, 1>& c, double T) noexcept {
             if (T <= 0.0)
@@ -191,7 +165,7 @@ struct VeryAimer::Impl {
             double t2 = t * t, t3 = t2 * t, t4 = t3 * t, t5 = t4 * t;
             s.p = c[0] + c[1] * t + c[2] * t2 + c[3] * t3 + c[4] * t4 + c[5] * t5;
             s.v = c[1] + 2 * c[2] * t + 3 * c[3] * t2 + 4 * c[4] * t3 + 5 * c[5] * t4;
-            s.a = eval_acc(c, t);
+            s.a = 2 * c[2] + 6 * c[3] * t + 12 * c[4] * t2 + 20 * c[5] * t3;
             s.on_traj = on_traj;
             return s;
         }
@@ -255,11 +229,11 @@ struct VeryAimer::Impl {
                     const double w1 = dt0 / denom;
 
                     s[i].v = w0 * (s[i].p - s[i - 1].p) / dt0 + w1 * (s[i + 1].p - s[i].p) / dt1;
-
                     s[i].a =
                         2.0 * ((s[i + 1].p - s[i].p) / dt1 - (s[i].p - s[i - 1].p) / dt0) / denom;
                 }
             };
+
             compute_va(yaw);
             compute_va(pitch);
 
@@ -269,6 +243,7 @@ struct VeryAimer::Impl {
         void limit_traj(
             Traj& traj,
             const std::vector<GimbalState::State>& s,
+            const std::vector<double>& prefix,
             int near_change_idx,
             double max_acc
         ) const noexcept {
@@ -280,7 +255,7 @@ struct VeryAimer::Impl {
                 return;
 
             auto buildSeg = [&](int l, int r) -> QuinticSegment {
-                double dur = time_at(r) - time_at(l);
+                double dur = prefix[r] - prefix[l];
                 return QuinticSegment::build(s[l], s[r], dur, false);
             };
 
@@ -294,13 +269,14 @@ struct VeryAimer::Impl {
 
             if (!interval) {
                 traj.segs.reserve(N - 1);
-                for (int i = 0; i < N - 1; ++i)
+                for (int i = 0; i < N - 1; ++i) {
                     traj.segs.push_back(
-                        QuinticSegment::build(s[i], s[i + 1], time_at(i + 1) - time_at(i), true)
+                        QuinticSegment::build(s[i], s[i + 1], prefix[i + 1] - prefix[i], true)
                     );
+                }
 
                 traj.seg_prefix_time.resize(traj.segs.size() + 1);
-                traj.seg_prefix_time[0] = 0.0;
+                traj.seg_prefix_time[0] = prefix[0];
                 for (size_t i = 0; i < traj.segs.size(); ++i)
                     traj.seg_prefix_time[i + 1] = traj.seg_prefix_time[i] + traj.segs[i].duration();
                 return;
@@ -366,19 +342,19 @@ struct VeryAimer::Impl {
                     i = interval->second - 1; // skip covered indices
                 } else {
                     traj.segs.push_back(
-                        QuinticSegment::build(s[i], s[i + 1], time_at(i + 1) - time_at(i), true)
+                        QuinticSegment::build(s[i], s[i + 1], prefix[i + 1] - prefix[i], true)
                     );
                 }
             }
 
             traj.seg_prefix_time.resize(traj.segs.size() + 1);
-            traj.seg_prefix_time[0] = 0.0;
+            traj.seg_prefix_time[0] = prefix[0];
             for (size_t i = 0; i < traj.segs.size(); ++i)
                 traj.seg_prefix_time[i + 1] = traj.seg_prefix_time[i] + traj.segs[i].duration();
         }
 
         void build_limit(double max_yaw_acc, double max_pitch_acc) noexcept {
-            auto cp_vec = get_cp_vec();
+            auto& cp_vec = get_cp_vec();
             auto prefix = get_prefix();
             unwrap_states(cp_vec);
             auto [yaw_states, pitch_states] = compute_node_states(cp_vec, prefix);
@@ -388,7 +364,7 @@ struct VeryAimer::Impl {
             const int N = static_cast<int>(cp_vec.size());
             if (N < 2)
                 return;
-            const double mid_time = 0.5 * duration();
+            const double mid_time = (prefix.back() + prefix[0]) / 2.0;
             for (size_t i = offset; i + offset + 1 < cp_vec.size(); ++i) {
                 if (cp_vec[i].aim_id == cp_vec[i + 1].aim_id)
                     continue;
@@ -401,18 +377,17 @@ struct VeryAimer::Impl {
                     best_idx = static_cast<int>(i);
                 }
             }
-            limit_traj(yaw_traj, yaw_states, best_idx, max_yaw_acc);
-            limit_traj(pitch_traj, pitch_states, best_idx, max_pitch_acc);
+            limit_traj(yaw_traj, yaw_states, prefix, best_idx, max_yaw_acc);
+            limit_traj(pitch_traj, pitch_states, prefix, best_idx, max_pitch_acc);
         }
         [[nodiscard]] inline GimbalState::State
         state_at(double t, const Traj& traj) const noexcept {
             if (traj.segs.empty())
                 return {};
-
-            if (t <= 0.0)
+            if (t <= traj.seg_prefix_time[0])
                 return traj.segs.front().eval(0.0);
 
-            if (t >= duration())
+            if (t >= traj.seg_prefix_time.back())
                 return traj.segs.back().eval(traj.segs.back().T);
 
             const auto it =
@@ -460,13 +435,6 @@ struct VeryAimer::Impl {
             min_enable_yaw_deg = config["min_enable_yaw_deg"].as<double>();
         }
     } params_;
-    class VeryAimerTraj {
-    public:
-        LimitTrajectory target_traj;
-        Trajectory<AimPoint, double> aim_traj;
-        ControlPoint cp0;
-        AutoAimFsm fsm;
-    };
     Impl(const YAML::Node& config) {
         params_.load(config);
         ballistic_trajectory_ = BallisticTrajectory::create(config["ballistic_trajectory"]);
@@ -654,7 +622,7 @@ struct VeryAimer::Impl {
                 target.get_target_state().pos().y(),
                 target.get_target_state().pos().x()
             );
-            int s = select_armor(target, fsm);
+            int s = cp0.aim_id;
             auto as_xyza = target.get_target_state().get_armors_xyza(target.target_number);
             center_xy_dis -= target.get_target_state().get_armor_r(s, target.target_number);
             as_xyza[s].x() = center_xy_dis * std::cos(center_yaw);
@@ -669,9 +637,7 @@ struct VeryAimer::Impl {
 
         LimitTrajectory limit_traj;
         Trajectory<AimPoint, double> aim_traj;
-        auto make_even = [](int x) {
-            return x % 2 == 0 ? x : x - 1; // 或 x + 1
-        };
+        auto make_even = [](int x) { return x % 2 == 0 ? x : x + 1; };
 
         const int horizon = make_even(params_.sample_horizon);
         const int half_horizon = horizon / 2.0;
@@ -685,21 +651,22 @@ struct VeryAimer::Impl {
                     state.predict(t);
                 });
                 auto cp = select_and_get_control_point(tmp_target, bullet_speed, fsm);
-                if (!cp0.valid) {
+                if (!cp.valid) {
                     cmd.appear = false;
                     return cmd;
                 }
                 GimbalState gs;
                 gs.aim_id = cp.aim_id;
                 gs.yaw_state.p = angles::normalize_angle(cp.yaw - cp0.yaw);
-                gs.pitch_state.p = cp.pitch;
+                gs.pitch_state.p = angles::normalize_angle(cp.pitch - cp0.pitch);
                 limit_traj.push_back(gs, t);
                 aim_traj.push_back(cp.aim_point, t);
             }
+
             GimbalState gs0;
             gs0.aim_id = cp0.aim_id;
-            gs0.yaw_state.p = cp0.yaw;
-            gs0.pitch_state.p = cp0.pitch;
+            gs0.yaw_state.p = 0.0;
+            gs0.pitch_state.p = 0.0;
             limit_traj.push_back(gs0, 0.0);
             aim_traj.push_back(cp0.aim_point, 0.0);
             for (int i = 1; i <= half_horizon; ++i) {
@@ -709,14 +676,14 @@ struct VeryAimer::Impl {
                     state.predict(t);
                 });
                 auto cp = select_and_get_control_point(tmp_target, bullet_speed, fsm);
-                if (!cp0.valid) {
+                if (!cp.valid) {
                     cmd.appear = false;
                     return cmd;
                 }
                 GimbalState gs;
                 gs.aim_id = cp.aim_id;
                 gs.yaw_state.p = angles::normalize_angle(cp.yaw - cp0.yaw);
-                gs.pitch_state.p = cp.pitch;
+                gs.pitch_state.p = angles::normalize_angle(cp.pitch - cp0.pitch);
                 limit_traj.push_back(gs, t);
                 aim_traj.push_back(cp.aim_point, t);
             }
@@ -736,17 +703,21 @@ struct VeryAimer::Impl {
         auto target_gimbal_state = limit_traj.Trajectory::state_at(0.0);
         auto control = limit_traj.LimitTrajectory::state_at(0.0);
         double control_yaw = angles::normalize_angle(control.yaw_state.p + cp0.yaw);
+        double control_pitch = angles::normalize_angle(control.pitch_state.p + cp0.pitch);
         cmd.timestamp = Clock::now();
-        cmd.yaw = angles::from_degrees(control_yaw);
-        cmd.v_yaw = angles::from_degrees(control.yaw_state.v);
-        cmd.a_yaw = angles::from_degrees(control.yaw_state.a);
-        cmd.pitch = angles::from_degrees(control.pitch_state.p);
-        cmd.v_pitch = angles::from_degrees(control.pitch_state.v);
-        cmd.a_pitch = angles::from_degrees(control.pitch_state.a);
-        cmd.target_yaw = angles::from_degrees(target_yaw);
-        cmd.target_pitch = angles::from_degrees(target_pitch);
+        cmd.yaw = angles::to_degrees(control_yaw);
+        cmd.v_yaw = angles::to_degrees(control.yaw_state.v);
+        cmd.a_yaw = angles::to_degrees(control.yaw_state.a);
+        cmd.pitch = angles::to_degrees(control_pitch);
+        cmd.v_pitch = angles::to_degrees(control.pitch_state.v);
+        cmd.a_pitch = angles::to_degrees(control.pitch_state.a);
+        cmd.target_yaw = angles::to_degrees(target_yaw);
+        cmd.target_pitch = angles::to_degrees(target_pitch);
         cmd.fly_time = prev_fly_time;
         cmd.appear = true;
+        cmd.aim_point = aim_traj.state_at(0.0);
+        cmd.aim_point.frame_id = target.get_target_state().frame_id;
+        cmd.select_id = cp0.aim_id;
         bool is_big = target.target_number == ArmorClass::NO1;
         auto cal_enbale_diff = [&]() {
             auto aim_point = aim_traj.state_at(0.0);
@@ -776,13 +747,18 @@ struct VeryAimer::Impl {
             return std::make_pair(std::abs(shooting_range_yaw), std::abs(shooting_range_pitch));
         };
         auto enable_diff = cal_enbale_diff();
-        cmd.enable_yaw_diff = enable_diff.first;
-        cmd.enable_pitch_diff = enable_diff.second;
+        cmd.enable_yaw_diff = angles::to_degrees(enable_diff.first);
+        cmd.enable_pitch_diff = angles::to_degrees(enable_diff.second);
         cmd.fire_advice =
-            std::abs(angles::shortest_angular_distance(target_yaw, cmd.yaw)) < cmd.enable_yaw_diff
-            && std::abs(angles::shortest_angular_distance(target_pitch, cmd.pitch))
+            std::abs(angles::shortest_angular_distance(
+                angles::from_degrees(cmd.target_yaw),
+                angles::from_degrees(cmd.yaw)
+            )) < cmd.enable_yaw_diff
+            && std::abs(angles::shortest_angular_distance(
+                   angles::from_degrees(cmd.target_pitch),
+                   angles::from_degrees(cmd.pitch)
+               ))
                 < cmd.enable_pitch_diff;
-
         auto delay = limit_traj.state_at(0.0 + params_.control_delay);
         if (!delay.pitch_state.on_traj || !delay.yaw_state.on_traj) {
             cmd.no_shoot();

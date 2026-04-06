@@ -1,3 +1,25 @@
+enemy_color: red
+bullet_speed: 23.0
+serial:
+  enable: true
+  device_name: /dev/ttyACM0 
+  baud_rate: 115200
+  char_size: 8
+  read_buf_size: 4096
+
+camera: ${ROOT_DIR}/config/camera.yaml
+
+auto_exposure:
+  enable: true
+  target_brightness: 25.0
+  tolerance: 3.0
+  step_gain: 15.0
+  decay_step: 1.0
+  exposure_min: 100.0
+  exposure_max: 3500.0
+  control_interval_ms: 300
+
+
 armor_detector:
   armor_infer:
     model_type: tup
@@ -5,7 +27,7 @@ armor_detector:
   net_detector:
     backend: tensorrt
     openvino:
-      model_path: "/home/hy/awakening/model/opt-1208-001.onnx"
+      model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
       device_name: "CPU"
       perf_mode: "CUMULATIVE_THROUGHPUT"
       # priority: "MEDIUM"
@@ -13,14 +35,14 @@ armor_detector:
       model_distribution_policy: "TENSOR_PARALLEL"
       execution_mode: "PERFORMANCE"
     tensorrt:
-      model_path: "/home/hy/awakening/model/opt-1208-001.onnx"
+      model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
       copy_context_num: 3
       min_free_mem_ratio: 0.1
       use_cuda_preproces: true
   number_classifier:
     enable: true
-    model_path: /home/hy/awakening/model/mlp.onnx
-    label_path: /home/hy/awakening/model/label.txt
+    model_path: ${ROOT_DIR}/model/mlp.onnx
+    label_path: ${ROOT_DIR}/model/label.txt
   color_classifier:
     enable: true
     diff_threshold: 20.0
@@ -51,8 +73,8 @@ armor_tracker:
 auto_aim_fsm:
   single_whole_up: 1.5 
   single_whole_down: 1.0
-  whole_pair_up: 7.5 
-  whole_pair_down: 6.5 #1s内至少换2次板子  2pi  否则轨迹规划无意义
+  whole_pair_up: 5.5 
+  whole_pair_down: 3.5 #1s内至少换2次板子  2pi  否则轨迹规划无意义
   pair_center_up: 16.5
   pair_center_down: 15.0
   transfer_thresh: 50
@@ -63,11 +85,11 @@ very_aimer:
   
   sample_horizon: 500
 
-  control_delay: 0.2
+  control_delay: 0.1
   
   max_yaw_acc: 40
   #全向yaw加速度测算37
-  max_pitch_acc: 25
+  max_pitch_acc: 50
   
 
   prediction_delay: 0.00
@@ -80,3 +102,8 @@ very_aimer:
   shooting_range_w_large: 0.24
   min_enable_pitch_deg: 0.25
   min_enable_yaw_deg: 0.25
+  ballistic_trajectory:
+    gravity: 9.8
+    resistance: 0.092
+    max_iter: 10
+  

@@ -86,6 +86,9 @@ static inline double normalize_angle(double angle) {
     return result - M_PI;
 }
 
+static inline double normalize_degrees(double degrees) {
+    return to_degrees(normalize_angle(from_degrees(degrees)));
+}
 /*!
  * \function
  * \brief shortest_angular_distance
@@ -100,6 +103,9 @@ static inline double normalize_angle(double angle) {
 
 static inline double shortest_angular_distance(double from, double to) {
     return normalize_angle(to - from);
+}
+static inline double shortest_angular_distance_degrees(double from, double to) {
+    return normalize_degrees(to - from);
 }
 
 /*!

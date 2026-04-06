@@ -2,8 +2,10 @@
 #include "angles.h"
 #include "motion_model.hpp"
 #include "tasks/auto_aim/type.hpp"
+#include "tasks/base/web.hpp"
 #include "utils/common/type_common.hpp"
 #include <chrono>
+#include <string>
 #include <vector>
 namespace awakening::auto_aim {
 using namespace armor_motion_model;
@@ -67,10 +69,15 @@ public:
         State tracker_state = LOST;
         int detect_count = 0;
         int lost_count = 0;
+        static inline std::string string_by_state(State state) {
+            constexpr const char* details[] = { "LOST", "DETECTING", "TRACKING", "TEMP_LOST" };
+            return std::string(details[state]);
+        }
         bool is_tracking() const noexcept {
             return tracker_state == TRACKING || tracker_state == TEMP_LOST;
         }
     };
+
     ArmorTarget() = default;
     ArmorTarget(const Armor& a, const ArmorTrackerCfg& c, const TimePoint& timestamp, int frame_id);
     [[nodiscard]] cv::Rect expanded(
@@ -109,6 +116,27 @@ public:
     }
     [[nodiscard]] int armor_num() {
         return measure_ctx.armor_num;
+    }
+    void write_log() {
+        web::write_log("armor_target", [&](auto& j) {
+            j["timestamp"] = static_cast<int>(
+                std::chrono::duration<double>(last_update.time_since_epoch()).count()
+            );
+            j["target_number"] = string_by_armor_class(target_number);
+            j["track_state"] = TrackState::string_by_state(track_state.tracker_state);
+            auto& j_target_state = j["target_state"];
+            j_target_state["cx"] = web::val(target_state.pos().x());
+            j_target_state["cy"] = web::val(target_state.pos().y());
+            j_target_state["cz"] = web::val(target_state.pos().z());
+            j_target_state["vx"] = web::val(target_state.vel().x());
+            j_target_state["vy"] = web::val(target_state.vel().y());
+            j_target_state["vz"] = web::val(target_state.vel().z());
+            j_target_state["yaw"] = web::val(target_state.yaw());
+            j_target_state["vyaw"] = web::val(target_state.vyaw());
+            j_target_state["r"] = web::val(target_state.r());
+            j_target_state["l"] = web::val(target_state.l());
+            j_target_state["h"] = web::val(target_state.h());
+        });
     }
 
 private:

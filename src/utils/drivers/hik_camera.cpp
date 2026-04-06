@@ -3,39 +3,39 @@
 namespace awakening {
 void HikCamera::load(const YAML::Node& config) {
     std::string target_sn = config["target_sn"].as<std::string>();
-    initializeCamera(target_sn);
+    initialize_camera(target_sn);
     auto acquisition_frame_rate = config["acquisition_frame_rate"].as<double>();
-    setAcquisitionFrameRate(acquisition_frame_rate);
+    set_AcquisitionFrameRate(acquisition_frame_rate);
     auto exposure_time = config["exposure_time"].as<double>();
-    setExposureTime(exposure_time);
+    set_ExposureTime(exposure_time);
     auto gain = config["gain"].as<double>();
-    setGain(gain);
+    set_Gain(gain);
     auto gamma = config["gamma"].as<double>();
-    setGamma(gamma);
+    set_Gamma(gamma);
     auto adc_bit_depth = config["adc_bit_depth"].as<std::string>();
-    setADCBitDepth(adc_bit_depth);
+    set_ADCBitDepth(adc_bit_depth);
     auto pixel_format = config["pixel_format"].as<std::string>();
-    setPixelFormat(pixel_format);
+    set_PixelFormat(pixel_format);
     auto acquisition_frame_rate_enable = config["acquisition_frame_rate_enable"].as<bool>();
-    setAcquisitionFrameRateEnable(acquisition_frame_rate_enable);
+    set_AcquisitionFrameRateEnable(acquisition_frame_rate_enable);
     auto width = config["width"].as<int>();
-    setWidth(width);
+    set_Width(width);
     auto height = config["height"].as<int>();
-    setHeight(height);
+    set_Height(height);
     auto offset_x = config["offset_x"].as<int>();
-    setOffsetX(offset_x);
+    set_OffsetX(offset_x);
     auto offset_y = config["offset_y"].as<int>();
-    setOffsetY(offset_y);
+    set_OffsetY(offset_y);
     auto reverse_x = config["reverse_x"].as<bool>();
-    setReverseX(reverse_x);
+    set_ReverseX(reverse_x);
     auto reverse_y = config["reverse_y"].as<bool>();
-    setReverseY(reverse_y);
+    set_ReverseY(reverse_y);
     auto trigger_mode = config["trigger_mode"].as<std::string>();
-    setTriggerMode(trigger_mode);
+    set_TriggerMode(trigger_mode);
     auto trigger_source = config["trigger_source"].as<std::string>();
-    setTriggerSource(trigger_source);
+    set_TriggerSource(trigger_source);
     auto trigger_activation = config["trigger_activation"].as<std::string>();
-    setTriggerActivation(trigger_activation);
+    set_TriggerActivation(trigger_activation);
 
     auto format_str = config["format"].as<std::string>();
     target_format_ = string2PixelFormat(format_str);
@@ -74,7 +74,7 @@ void HikCamera::restart() {
     AWAKENING_INFO("Camera restarted successfully!");
     return;
 }
-ImageFrame HikCamera::toImageFrame(Frame& f) {
+ImageFrame HikCamera::to_image_frame(Frame& f) {
     ImageFrame img_frame {
         .format = target_format_,
         .timestamp = f.timestamp,
@@ -82,7 +82,7 @@ ImageFrame HikCamera::toImageFrame(Frame& f) {
     const auto& info = f.out_frame.stFrameInfo;
     cv::Mat src(cv::Size(info.nWidth, info.nHeight), CV_8U, f.out_frame.pBufAddr);
     const auto pixel_type = info.enPixelType;
-    const auto& ref_cvt = getCvtMap();
+    const auto& ref_cvt = get_cvt_map();
     int cvt_code = ref_cvt.at(pixel_type);
     if (cvt_code != -1) {
         cv::cvtColor(src, img_frame.src_img, cvt_code);
@@ -93,7 +93,7 @@ ImageFrame HikCamera::toImageFrame(Frame& f) {
     return img_frame;
 }
 
-bool HikCamera::initializeCamera(const std::string& target_sn) {
+bool HikCamera::initialize_camera(const std::string& target_sn) {
     target_sn_ = target_sn;
 
     if (camera_handle_ != nullptr) {

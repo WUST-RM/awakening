@@ -1,8 +1,12 @@
-#include "_rcl/node.hpp"
-#include "_rcl/tf.hpp"
-#include "_rcl/visual/armor.hpp"
-#include "_rcl/visual/armor_target.hpp"
+#include <optional>
+#ifdef USE_ROS2
+    #include "_rcl/node.hpp"
+    #include "_rcl/tf.hpp"
+    #include "_rcl/visual/armor.hpp"
+    #include "_rcl/visual/armor_target.hpp"
+#endif
 #include "param_deliver.h"
+#include "rerun.hpp"
 #include "tasks/auto_aim/armor_control/very_aimer.hpp"
 #include "tasks/auto_aim/armor_detect/armor_detector.hpp"
 #include "tasks/auto_aim/armor_tracker/armor_target.hpp"
@@ -12,6 +16,7 @@
 #include "tasks/auto_aim/type.hpp"
 #include "tasks/base/common.hpp"
 #include "tasks/base/packet_typedef.hpp"
+#include "tasks/base/web.hpp"
 #include "utils/buffer.hpp"
 #include "utils/common/image.hpp"
 #include "utils/common/type_common.hpp"
@@ -23,19 +28,6 @@
 #include "utils/semaphore_guard.hpp"
 #include "utils/signal_guard.hpp"
 #include "utils/utils.hpp"
-#include <angles.h>
-#include <functional>
-#include <iostream>
-#include <memory>
-#include <opencv2/calib3d.hpp>
-#include <opencv2/core/eigen.hpp>
-#include <opencv2/core/types.hpp>
-#include <opencv2/highgui.hpp>
-#include <spdlog/common.h>
-#include <string>
-#include <thread>
-#include <utility>
-#include <vector>
 using namespace awakening;
 
 enum class SimpleFrame : int { ODOM, GIMBAL_ODOM, GIMBAL, CAMERA, CAMERA_CV, SHOOT, N };
@@ -76,37 +68,59 @@ struct LogCtx {
         latency_ms_total = 0.0;
     }
 };
-static constexpr auto CAMERA_CONFIG_PATH_ARR = utils::concat(ROOT_DIR, "/config/camera.yaml");
-static constexpr std::string_view CAMERA_CONFIG_PATH(CAMERA_CONFIG_PATH_ARR.data());
-static constexpr auto AUTO_AIM_CONFIG_PATH_ARR = utils::concat(ROOT_DIR, "/config/auto_aim.yaml");
-static constexpr std::string_view AUTO_AIM_CONFIG_PATH(AUTO_AIM_CONFIG_PATH_ARR.data());
-static constexpr auto ROBOT_CONFIG_PATH_ARR = utils::concat(ROOT_DIR, "/config/robot.yaml");
-static constexpr std::string_view ROBOT_CONFIG_PATH(ROBOT_CONFIG_PATH_ARR.data());
-int main() {
+
+int main(int argc, char** argv) {
     logger::init(spdlog::level::trace);
-    Scheduler s;
-    EnemyColor enemy_color = EnemyColor::RED;
-    double bullet_speed = 21.0;
-    utils::SWMR<auto_aim::ArmorTarget> armor_target;
-    rcl::RclcppNode rcl_node("auto_aim");
-    auto camera_config = YAML::LoadFile(std::string(CAMERA_CONFIG_PATH));
-    auto auto_aim_config = YAML::LoadFile(std::string(AUTO_AIM_CONFIG_PATH));
-    auto robot_config = YAML::LoadFile(std::string(ROBOT_CONFIG_PATH));
-    std::unique_ptr<SerialDriver> serial;
-    if (robot_config["serial"]["enable"].as<bool>()) {
-        serial = std::make_unique<SerialDriver>(robot_config["serial"], s);
+    auto get_arg = [&](int i) -> std::optional<std::string> {
+        if (i < argc) {
+            AWAKENING_INFO("get args {} ", std::string(argv[i]));
+            return std::make_optional(std::string(argv[i]));
+        }
+        return std::nullopt;
+    };
+    bool debug = false;
+    std::string config_path;
+    auto first_arg = get_arg(1);
+    if (first_arg) {
+        config_path = first_arg.value();
+    } else {
+        return 1;
     }
+    auto second_arg = get_arg(2);
+    if (second_arg) {
+        debug = second_arg.value() == "true";
+    }
+    auto config = YAML::LoadFile(config_path);
+
+    Scheduler s;
+    EnemyColor enemy_color = enemy_color_from_string(config["enemy_color"].as<std::string>());
+    double bullet_speed = config["bullet_speed"].as<double>();
+#ifdef USE_ROS2
+    rcl::RclcppNode rcl_node("auto_aim");
+    rcl::TF rcl_tf(rcl_node);
+#endif
+
+    std::unique_ptr<SerialDriver> serial;
+    if (config["serial"]["enable"].as<bool>()) {
+        serial = std::make_unique<SerialDriver>(config["serial"], s);
+    }
+    auto camera_config = YAML::LoadFile(replace_root_dir(config["camera"].as<std::string>()));
     HikCamera camera(camera_config["hik_camera"], s);
     CameraInfo camera_info;
-    camera_info.load(YAML::LoadFile(camera_config["camera_info_path"].as<std::string>()));
-    auto_aim::ArmorDetector armor_detector(auto_aim_config["armor_detector"]);
-    auto_aim::ArmorTracker armor_tracker(auto_aim_config["armor_tracker"]);
-    auto_aim::AutoAimFsmController auto_aim_fsm_controller(auto_aim_config["auto_aim_fsm"]);
-    auto_aim::VeryAimer very_aimer(auto_aim_config["very_aimer"]);
+    camera_info.load(camera_config["camera_info"]);
+    auto_aim::ArmorDetector armor_detector(config["armor_detector"]);
+    auto_aim::ArmorTracker armor_tracker(config["armor_tracker"]);
+    auto_aim::AutoAimFsmController auto_aim_fsm_controller(config["auto_aim_fsm"]);
+    auto_aim::VeryAimer very_aimer(config["very_aimer"]);
     utils::OrderedQueue<auto_aim::Armors> armors_queue;
+    utils::SWMR<auto_aim::ArmorTarget> armor_target;
     LogCtx log_ctx;
-    auto_aim::AutoAimDebugCtx auto_aim_dbg { .camera_info_ = camera_info };
-    rcl::TF rcl_tf(rcl_node);
+    std::optional<auto_aim::AutoAimDebugCtx> auto_aim_dbg;
+    if (debug) {
+        auto_aim_dbg.emplace();
+        auto_aim_dbg->camera_info_ = camera_info;
+    }
+
     auto tf = SimpleRobotTF::create();
     {
         tf->add_edge(SimpleFrame::ODOM, SimpleFrame::GIMBAL_ODOM);
@@ -128,6 +142,7 @@ int main() {
         gimbal_odom_in_odom.translation() = Vec3(0, 0, .0);
         tf->push(SimpleFrame::ODOM, SimpleFrame::GIMBAL_ODOM, Clock::now(), gimbal_odom_in_odom);
     }
+
     s.register_task<HikIO, CommonFrameIo>("push_common_frame", [&](HikIO::second_type&& f) {
         static int current_id = 0;
         log_ctx.camera_count++;
@@ -159,10 +174,64 @@ int main() {
                     Clock::now(),
                     gimbal_2_gimbal_odom
                 );
+                robo.update_log();
             }
         });
     }
+    s.register_task<CommonFrameIo>("auto_exposure", [&](CommonFrameIo::second_type&& frame) {
+        struct AutoExposureCfg {
+            bool enable = false;
+            double ttarget_brightness;
+            double step_gain;
+            double decay_step;
+            double tolerance;
+            double exposure_min;
+            double exposure_max;
+            double control_interval_ms;
+            void load(const YAML::Node& c) {
+                ttarget_brightness = c["target_brightness"].as<double>();
+                step_gain = c["step_gain"].as<double>();
+                decay_step = c["decay_step"].as<double>();
+                tolerance = c["tolerance"].as<double>();
+                exposure_min = c["exposure_min"].as<double>();
+                exposure_max = c["exposure_max"].as<double>();
+                control_interval_ms = c["control_interval_ms"].as<double>();
+            }
+        };
+        static std::optional<AutoExposureCfg> auto_exposure_cfg;
+        if (config["auto_exposure"]["enable"].as<bool>()) {
+            auto_exposure_cfg.emplace();
+            auto_exposure_cfg.value().load(config["auto_exposure"]);
+        }
+        if (auto_exposure_cfg) {
+            auto& cfg = auto_exposure_cfg.value();
+            utils::dt_once(
+                [&]() {
+                    cv::Mat img = frame.img_frame.src_img;
+                    cv::Mat gray;
+                    cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+                    const double brightness = cv::mean(gray)[0];
 
+                    const double diff = brightness - cfg.ttarget_brightness;
+                    const double exposure_min = cfg.exposure_min;
+                    const double exposure_max = cfg.exposure_max;
+                    double exposure_time = camera.get_ExposureTime();
+                    static double last_exposure_time = 0.0;
+                    if (std::fabs(diff) > cfg.tolerance && exposure_time > 0.0) {
+                        exposure_time -= diff * cfg.step_gain;
+                    } else {
+                        exposure_time -= cfg.decay_step;
+                    }
+                    exposure_time = std::clamp(exposure_time, exposure_min, exposure_max);
+                    if (std::abs(exposure_time - last_exposure_time) > 10) {
+                        camera.set_ExposureTime(exposure_time);
+                        last_exposure_time = exposure_time;
+                    }
+                },
+                std::chrono::milliseconds((int)cfg.control_interval_ms)
+            );
+        }
+    });
     s.register_task<CommonFrameIo, DetIo>("detector", [&](CommonFrameIo::second_type&& frame) {
         static std::unique_ptr<std::counting_semaphore<>> detector_sem;
         if (!detector_sem) {
@@ -202,8 +271,11 @@ int main() {
         }
         armors_queue.enqueue(armors);
         auto batch_armors = armors_queue.dequeue_batch();
-        auto_aim_dbg.expanded_buffer.write(frame.expanded);
-        auto_aim_dbg.img_frame_buffer.write(std::move(frame.img_frame));
+        if (auto_aim_dbg) {
+            auto_aim_dbg->expanded_buffer.write(frame.expanded);
+            auto_aim_dbg->img_frame_buffer.write(std::move(frame.img_frame.clone()));
+        }
+
         return std::make_tuple(std::optional<DetIo::second_type>(std::move(batch_armors)));
     });
 
@@ -229,12 +301,6 @@ int main() {
                 __armor_target.jumped
             );
             armor_target.write(__armor_target);
-            rcl::pub_armor_marker(rcl_node, SimpleFrame_to_str(armors.frame_id), armors);
-            rcl::pub_armor_target_marker(
-                rcl_node,
-                SimpleFrame_to_str(__armor_target.get_target_state().frame_id),
-                __armor_target
-            );
 
             auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                                   std::chrono::steady_clock::now() - armors.timestamp
@@ -243,19 +309,39 @@ int main() {
             log_ctx.latency_ms_total += latency_ms;
             log_ctx.found_count += armor_tracker.get_count();
             armor_tracker.reset_count();
-            auto_aim_dbg.armors_buffer.write(armors);
+            if (auto_aim_dbg) {
+                auto_aim_dbg->armors_buffer.write(armors);
+#ifdef USE_ROS2
+                rcl::pub_armor_marker(rcl_node, SimpleFrame_to_str(armors.frame_id), armors);
+                rcl::pub_armor_target_marker(
+                    rcl_node,
+                    SimpleFrame_to_str(__armor_target.get_target_state().frame_id),
+                    __armor_target
+                );
+#endif
+            }
+
             log_ctx.track_count++;
         }
     });
     s.add_rate_source<0>("slover", 1000.0, [&]() {
         log_ctx.solve_count++;
         auto target = armor_target.read();
+        auto old_in_gimbal_odom = tf->pose_a_in_b(
+            SimpleFrame(target.get_target_state().frame_id),
+            SimpleFrame::GIMBAL_ODOM,
+            target.get_target_state().timestamp
+        );
+        target.set_target_state([&](armor_motion_model::State& state) {
+            state.transform(old_in_gimbal_odom, std::to_underlying(SimpleFrame::GIMBAL_ODOM));
+        }); // todo : kill gimbal_odom_vel in odom
         GimbalCmd cmd {
             .appear = false,
         };
         if (target.check()) {
             cmd = very_aimer.very_aim(target, bullet_speed, auto_aim_fsm_controller.get_state());
         }
+
         if (serial) {
             SendRobotCmdData send;
             send.cmd_ID = SendRobotCmdData::ID;
@@ -275,6 +361,15 @@ int main() {
             send.enable_pitch_diff = cmd.enable_pitch_diff;
             serial->write(std::move(utils::to_vector(send)));
         }
+        auto old_in_camera_cv = tf->pose_a_in_b(
+            SimpleFrame(cmd.aim_point.frame_id),
+            SimpleFrame::CAMERA_CV,
+            cmd.timestamp
+        );
+        cmd.aim_point.transform(old_in_camera_cv, std::to_underlying(SimpleFrame::CAMERA_CV));
+        if (auto_aim_dbg) {
+            auto_aim_dbg->gimbal_cmd_buffer.write(cmd);
+        }
     });
     s.add_rate_source<1>("logger", 1.0, [&]() {
         double avg_latency_ms = log_ctx.latency_ms_total / log_ctx.track_count;
@@ -288,30 +383,46 @@ int main() {
             log_ctx.camera_count,
             avg_latency_ms
         );
-        auto_aim_dbg.avg_latency_ms_buffer.write(avg_latency_ms);
+        if (auto_aim_dbg) {
+            auto_aim_dbg->avg_latency_ms_buffer.write(avg_latency_ms);
+        }
         log_ctx.reset();
     });
-    s.add_rate_source<2>("debug", 60.0, [&]() {
-        auto target = armor_target.read();
-        auto old_in_camera_cv = tf->pose_a_in_b(
-            SimpleFrame(target.get_target_state().frame_id),
-            SimpleFrame::CAMERA_CV,
-            target.get_target_state().timestamp
-        );
-        target.set_target_state([&](armor_motion_model::State& state) {
-            state.transform(old_in_camera_cv, std::to_underlying(SimpleFrame::CAMERA_CV));
+    if (auto_aim_dbg) {
+        s.add_rate_source<2>("debug", 60.0, [&]() {
+            auto target = armor_target.read();
+            auto old_in_camera_cv = tf->pose_a_in_b(
+                SimpleFrame(target.get_target_state().frame_id),
+                SimpleFrame::CAMERA_CV,
+                target.get_target_state().timestamp
+            );
+            target.set_target_state([&](armor_motion_model::State& state) {
+                state.transform(old_in_camera_cv, std::to_underlying(SimpleFrame::CAMERA_CV));
+            });
+            target.write_log();
+            auto_aim_dbg->armor_target_buffer.write(target);
+            auto_aim_dbg->fsm_state_buffer.write(auto_aim_fsm_controller.get_state());
+            auto gimbal_in_gimbal_odom =
+                tf->pose_a_in_b(SimpleFrame::GIMBAL, SimpleFrame::GIMBAL_ODOM, Clock::now());
+            auto euler =
+                utils::matrix2euler(gimbal_in_gimbal_odom.linear(), utils::EulerOrder::ZYX);
+            auto gimbal_yaw_pitch =
+                std::make_pair(angles::to_degrees(euler[0]), angles::to_degrees(euler[1]));
+            auto_aim_dbg->gimbal_yaw_pitch_buffer.write(gimbal_yaw_pitch);
+            write_debug_data(auto_aim_dbg.value());
+            auto debug_img = auto_aim_dbg->img_frame().src_img;
+            if (!debug_img.empty()) {
+                auto_aim::draw_auto_aim(debug_img, auto_aim_dbg.value());
+                web::write_shm(debug_img);
+            }
         });
-        auto_aim_dbg.armor_target_buffer.write(target);
-        auto debug_img = auto_aim_dbg.img_frame().src_img;
-        if (!debug_img.empty()) {
-            auto_aim::draw_auto_aim(debug_img, auto_aim_dbg);
-            cv::imshow("Auto Aim Debug", debug_img);
-            cv::waitKey(1);
-        }
-    });
-    s.add_rate_source<1>("tf_pub", 100.0, [&]() {
-        rcl_tf.pub_robot_tf(*tf, [](SimpleFrame frame) { return SimpleFrame_to_str(frame); });
-    });
+#ifdef USE_ROS2
+        s.add_rate_source<1>("tf_pub", 100.0, [&]() {
+            rcl_tf.pub_robot_tf(*tf, [](SimpleFrame frame) { return SimpleFrame_to_str(frame); });
+        });
+#endif
+    }
+
     camera.start<HikTag>("hik");
     if (serial) {
         serial->start<SerialTag>("serial");

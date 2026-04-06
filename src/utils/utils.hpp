@@ -164,13 +164,11 @@ inline std::string expand_env(const std::string& s) {
     return result;
 }
 template<typename Func>
-void x_sec_once(Func&& func, double dt) noexcept {
+void dt_once(Func&& func, std::chrono::duration<double> dt) noexcept {
     static auto last_call = std::chrono::steady_clock::now();
 
-    const auto now = std::chrono::steady_clock::now();
-    const double elapsed = std::chrono::duration<double>(now - last_call).count();
-
-    if (elapsed >= dt) {
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_call >= dt) {
         last_call = now;
         func();
     }

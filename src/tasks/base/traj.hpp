@@ -131,7 +131,7 @@ public:
     std::vector<PointT>& get_cp_vec() noexcept {
         return cp_;
     }
-    std::vector<TimeT> get_prefix() {
+    const std::vector<TimeT>& get_prefix() const noexcept {
         return prefix_;
     }
 

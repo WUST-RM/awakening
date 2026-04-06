@@ -28,7 +28,7 @@ struct NetDetectorTensorrt::Impl {
         double min_free_mem_ratio = 0.1;
         bool use_cuda_preproces = true;
         void load(const YAML::Node& config) {
-            model_path = config["model_path"].as<std::string>();
+            model_path = replace_root_dir(config["model_path"].as<std::string>());
             copy_context_num = config["copy_context_num"].as<int>();
             min_free_mem_ratio = config["min_free_mem_ratio"].as<double>();
             use_cuda_preproces = config["use_cuda_preproces"].as<bool>();

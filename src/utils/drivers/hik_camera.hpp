@@ -40,12 +40,12 @@ public:
             AWAKENING_ERROR("Failed to start camera grabbing!");
         }
         running_ = true;
-        daemon_thread_ = std::thread(&HikCamera::runLoop<IO>, this);
+        daemon_thread_ = std::thread(&HikCamera::run_loop<IO>, this);
     }
     template<typename IO>
-    void runLoop() {
+    void run_loop() {
         while (running_) {
-            hikCaptureLoop<IO>();
+            hik_capture_loop<IO>();
             if (!running_) {
                 break;
             }
@@ -53,7 +53,7 @@ public:
         }
     }
     template<typename IO>
-    void hikCaptureLoop() {
+    void hik_capture_loop() {
         AWAKENING_INFO("Starting image capture loop!");
         Frame frame;
         while (running_) {
@@ -63,10 +63,10 @@ public:
                 const auto current_time = std::chrono::steady_clock::now();
 
                 const auto half_exposure =
-                    std::chrono::microseconds(static_cast<long>(getExposureTime() / 2));
+                    std::chrono::microseconds(static_cast<long>(get_ExposureTime() / 2));
 
                 frame.timestamp = current_time - half_exposure;
-                auto img_frame = toImageFrame(frame);
+                auto img_frame = to_image_frame(frame);
                 scheduler_.runtime_push_source<IO>(
                     source_snapshot_id_,
                     [f = std::move(img_frame)]() {
@@ -108,13 +108,13 @@ public:
         { PixelType_Gvsp_RGB8_Packed, cv::COLOR_RGB2GRAY },
         { PixelType_Gvsp_Mono8, -1 },
     };
-    const std::unordered_map<MvGvspPixelType, int>& getCvtMap() {
+    const std::unordered_map<MvGvspPixelType, int>& get_cvt_map() {
         static const std::array details { CVT_MAP_BGR, CVT_MAP_GRAY, CVT_MAP_RGB };
         return details[std::to_underlying(target_format_)];
     }
-    ImageFrame toImageFrame(Frame& f);
+    ImageFrame to_image_frame(Frame& f);
 
-    bool initializeCamera(const std::string& target_sn);
+    bool initialize_camera(const std::string& target_sn);
     inline void HikSetFloatRange(void* camera_handle, const char* param, double val) {
         MVCC_FLOATVALUE fv {};
         int s = MV_CC_GetFloatValue(camera_handle, param, &fv);
@@ -185,11 +185,11 @@ public:
 
 #define HIK_GEN_MEMBER_GET_SET(type, camera_handle, param) \
     type param##_val {}; \
-    inline void set##param(const type& v) { \
+    inline void set_##param(const type& v) { \
         param##_val = v; \
         HikSetRangeDispatch(camera_handle, #param, param##_val); \
     } \
-    inline type get##param() const { \
+    inline type get_##param() const { \
         return param##_val; \
     }
     HIK_GEN_MEMBER_GET_SET(std::string, camera_handle_, PixelFormat)

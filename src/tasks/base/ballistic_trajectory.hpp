@@ -31,7 +31,6 @@ public:
     }
     std::optional<double> solve_pitch(const Vec3& target_pos, double v0) const {
         const double target_height = target_pos.z();
-        double pitch = 0;
         const double distance =
             std::sqrt(target_pos.x() * target_pos.x() + target_pos.y() * target_pos.y());
 
@@ -39,34 +38,36 @@ public:
             return std::nullopt;
         }
 
-        auto f = [&](double angle) {
-            double r = params_.resistance < 1e-4 ? 1e-4 : params_.resistance;
-            double t = (std::exp(r * distance) - 1) / (r * v0 * std::cos(angle));
-            double y = v0 * std::sin(angle) * t - 0.5 * params_.gravity * t * t;
+        // 二分法边界 [-45°, 60°]
+        double left = -M_PI / 4.0;
+        double right = M_PI / 3.0;
 
-            return y - target_height;
+        auto f = [&](double angle) -> double {
+            double t;
+            if (params_.resistance < 1e-6) {
+                t = distance / (v0 * std::cos(angle));
+            } else {
+                double r = std::max(params_.resistance, 1e-6);
+                t = (std::exp(r * distance) - 1) / (r * v0 * std::cos(angle));
+            }
+
+            return v0 * std::sin(angle) * t - 0.5 * params_.gravity * t * t - target_height;
         };
-
-        double left = -M_PI / 4.0; // -45°
-        double right = M_PI / 3.0; // 60°
 
         double f_left = f(left);
         double f_right = f(right);
 
         if (f_left * f_right > 0) {
-            return false;
+            return std::nullopt; // 没有解
         }
 
         double mid = 0;
-        double f_mid = 0;
-
         for (int i = 0; i < params_.max_iter; ++i) {
             mid = 0.5 * (left + right);
-            f_mid = f(mid);
+            double f_mid = f(mid);
 
-            if (std::abs(f_mid) < 0.01) {
-                pitch = mid;
-                return true;
+            if (std::abs(f_mid) < 1e-3 || (right - left) < 1e-6) {
+                return std::make_optional(mid);
             }
 
             if (f_left * f_mid < 0) {
@@ -77,8 +78,8 @@ public:
                 f_left = f_mid;
             }
         }
-        pitch = mid;
-        return std::make_optional(pitch);
+
+        return std::make_optional(mid);
     }
     double solve_flytime(const Vec3& target_pos, const double v0) {
         double r = params_.resistance < 1e-4 ? 1e-4 : params_.resistance;

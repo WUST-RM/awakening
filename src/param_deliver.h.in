@@ -1,7 +1,21 @@
 #pragma once
 
+#include <cstring>
 #include <string>
 #include <string_view>
 
 static constexpr const char ROOT_DIR[] = "@CMAKE_CURRENT_SOURCE_DIR@";
 
+inline std::string replace_root_dir(const std::string& raw)
+{
+    std::string result = raw;
+    const std::string token = "${ROOT_DIR}";
+    size_t pos = 0;
+
+    while ((pos = result.find(token, pos)) != std::string::npos) {
+        result.replace(pos, token.length(), ROOT_DIR);
+        pos += std::strlen(ROOT_DIR); // 跳过刚替换的部分
+    }
+
+    return result;
+}

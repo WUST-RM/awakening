@@ -28,7 +28,6 @@ find_package(Ceres REQUIRED)
 find_package(HikSDK REQUIRED)
 find_package(TBB REQUIRED)
 find_package(spdlog REQUIRED)
-
 set(BUILD_DEFINITIONS "")
 set(BUILD_LIBS "")
 
@@ -142,11 +141,6 @@ else()
 endif()
 
 
-
-
-
-
-
 function(add_common_executable exe_name src_file)
     add_executable(${exe_name} ${src_file})
     target_link_libraries(${exe_name}  ${PROJECT_NAME}_utils)
@@ -154,5 +148,11 @@ endfunction()
 add_common_executable(auto_aim src/runtime/auto_aim.cpp)
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_auto_aim
+)
+if(ROS2_FULL_FOUND)
+
+target_link_libraries(auto_aim
     ${PROJECT_NAME}_rcl
 )
+
+endif()

@@ -72,7 +72,7 @@ struct NetDetectorOpenVINO::Impl {
 
         void load(const YAML::Node& config) {
             if (config["model_path"]) {
-                model_path = config["model_path"].as<std::string>();
+                model_path = replace_root_dir(config["model_path"].as<std::string>());
             }
 
             if (config["device_name"]) {
