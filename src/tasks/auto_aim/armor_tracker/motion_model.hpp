@@ -133,7 +133,7 @@ struct Measure {
 struct State {
     VecX x;
     TimePoint timestamp;
-    int frame_id;
+    int frame_id = 0;
     std::optional<ISO3> oldest_in_new;
     double oldest_yaw;
     std::vector<Vec4> get_armors_xyza(auto_aim::ArmorClass armor_number) const {

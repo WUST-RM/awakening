@@ -70,10 +70,10 @@ public:
     }
 
     template<typename Tag>
-    void subscribe(std::function<void(typename RecordTagTraits<Tag>::Type&)> cb) {
+    void subscribe(std::function<void(typename RecordTagTraits<Tag>::Type&&)> cb) {
         subs_[RecordTagTraits<Tag>::id] = [cb](const std::vector<uint8_t>& data) {
             auto obj = RecordTagTraits<Tag>::deserialize(data);
-            cb(obj);
+            cb(std::move(obj));
         };
     }
 

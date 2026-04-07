@@ -22,6 +22,8 @@ rsync -avz \
     --exclude='bin/' \
     --exclude='build/' \
     --exclude='model/' \
+    --exclude='log/' \
+    --exclude='record/' \
     --exclude='CMakeLists.txt' \
     "${WORK_DIR}/" \
     "${REMOTE_USER}@${REMOTE_IP}:${TARGET_PATH}/"

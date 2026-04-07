@@ -6,14 +6,14 @@
 #include <chrono>
 #include <fcntl.h>
 #include <iostream>
+#include <mutex>
+#include <queue>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
-#include <queue>
-#include <mutex>
 
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
@@ -72,8 +72,10 @@ public:
         using NodeT = SourceNode<OutputPairs...>;
         using FuncT = typename NodeT::Func;
 
-        static_assert(std::is_convertible_v<Fn, FuncT>,
-                      "Fn must be convertible to SourceNode::Func");
+        static_assert(
+            std::is_convertible_v<Fn, FuncT>,
+            "Fn must be convertible to SourceNode::Func"
+        );
 
         auto& base = source_snapshot[snap_id];
 
@@ -127,8 +129,12 @@ public:
                 while (!st.stop_requested() && running.load(std::memory_order_acquire)) {
                     next_time += period;
 
-                    schedule(w.node);  
+                    schedule(w.node);
+                    //             const auto& next = w.node->execute();
 
+                    // for (auto& n: next) {
+                    //     schedule(n);
+                    // }
                     auto now = clock::now();
                     if (now > next_time) {
                         next_time = now;
@@ -152,7 +158,7 @@ public:
 
         rate_threads.clear();
 
-        tg.cancel(); 
+        tg.cancel();
         arena.execute([this] { tg.wait(); });
 
         AWAKENING_INFO("awakening Scheduler stopped");
@@ -209,7 +215,6 @@ private:
 #endif
     }
 
-
     void schedule(NodeBase::Ptr node) {
         if (!node || !running.load(std::memory_order_acquire))
             return;
@@ -219,12 +224,7 @@ private:
             task_queue.push(node);
         }
 
-
-        arena.execute([this] {
-            tg.run([this] {
-                process_queue();
-            });
-        });
+        arena.execute([this] { tg.run([this] { process_queue(); }); });
     }
 
     void process_queue() {

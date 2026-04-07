@@ -217,9 +217,7 @@ int main(int argc, char** argv) {
         log_ctx.camera_count++;
         if (recorder) {
             utils::dt_once(
-                [&]() {
-                    recorder->record<CameraTag>(f);
-                },
+                [&]() { recorder->record<CameraTag>(f); },
                 std::chrono::milliseconds(100)
             );
         }
@@ -253,7 +251,7 @@ int main(int argc, char** argv) {
         }
         return std::make_tuple(std::optional<CommonFrameIo::second_type>(std::move(frame)));
     });
-    if (serial) {
+    if (serial || player) {
         s.register_task<SerialIO>("receive_serial", [&](SerialIO::second_type&& data) {
             if (recorder) {
                 utils::dt_once(
@@ -345,7 +343,7 @@ int main(int argc, char** argv) {
             detector_sem =
                 std::make_unique<std::counting_semaphore<>>(config["max_infer_num"].as<int>());
         }
-        
+
         auto_aim::Armors armors { .timestamp = frame.img_frame.timestamp,
                                   .id = frame.id,
                                   .frame_id = frame.frame_id };
@@ -412,7 +410,7 @@ int main(int argc, char** argv) {
             log_ctx.track_count++;
         }
     });
-    s.add_rate_source<>("slover", 1000.0, [&]() {
+    s.add_rate_source<>("solver", 1000.0, [&]() {
         log_ctx.solve_count++;
         auto target = armor_target.read();
         auto old_in_gimbal_odom = tf->pose_a_in_b(
@@ -443,7 +441,7 @@ int main(int argc, char** argv) {
             send.pitch = cmd.pitch;
             send.v_yaw = cmd.v_yaw;
             send.target_yaw = cmd.target_yaw;
-            send.target_pitch =cmd.target_pitch;
+            send.target_pitch = cmd.target_pitch;
             send.v_pitch = cmd.v_pitch;
             send.a_yaw = cmd.a_yaw;
             send.a_pitch = cmd.a_pitch;
@@ -490,7 +488,7 @@ int main(int argc, char** argv) {
             target.set_target_state([&](armor_motion_model::State& state) {
                 state.transform(old_in_camera_cv, std::to_underlying(SimpleFrame::CAMERA_CV));
             });
-            
+
             auto_aim_dbg->armor_target_buffer.write(target);
             auto_aim_dbg->fsm_state_buffer.write(auto_aim_fsm_controller.get_state());
             auto gimbal_in_gimbal_odom =
@@ -514,30 +512,34 @@ int main(int argc, char** argv) {
 #endif
     }
 
-    if (camera) {
-        camera->start<CameraTag>("hik");
-    }
-
-    if (serial) {
-        serial->start<SerialTag>("serial");
-    }
-
     if (player) {
         auto cam = s.register_source<CameraIO>("hik");
         auto serial = s.register_source<SerialIO>("serial");
-        player->subscribe<CameraTag>([&](ImageFrame& f) {
+        player->subscribe<CameraTag>([&](ImageFrame&& f) {
             s.runtime_push_source<CameraIO>(cam, [&, _f = std::move(f)]() {
                 return std::make_tuple(std::optional<CameraIO::second_type>(std::move(_f)));
             });
         });
-        player->subscribe<SerialTag>([&](std::vector<uint8_t>& buf) {
+        player->subscribe<SerialTag>([&](std::vector<uint8_t>&& buf) {
             s.runtime_push_source<SerialIO>(serial, [&, __buf = std::move(buf)]() {
                 return std::make_tuple(std::optional<SerialIO::second_type>(std::move(__buf)));
             });
         });
+
+    } else {
+        if (camera) {
+            camera->start<CameraTag>("hik");
+        }
+
+        if (serial) {
+            serial->start<SerialTag>("serial");
+        }
     }
     s.build();
     s.run();
+    if (player) {
+        std::thread([&]() { player->play(1.0); }).detach();
+    }
 #ifdef USE_ROS2
     std::thread([&]() { rcl_node.spin(); }).detach();
 #endif

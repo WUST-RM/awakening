@@ -213,9 +213,7 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(const std::vector<Armor>& 
                 .armor_num = armors_num,
                 .id = id,
             };
-            Measure measure{
-                .ctx = tmp_ctx
-            };
+            Measure measure { .ctx = tmp_ctx };
             VecZ z_pred;
             measure.h(target_state.x, z_pred);
 

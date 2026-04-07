@@ -25,22 +25,11 @@ port = 8000
 
 
 
-def ensure_shared_memory():
-    with permission_lock:
-        if not os.path.exists(shared_memory_path):
-            print(f"创建共享内存文件: {shared_memory_path}")
-            with open(shared_memory_path, "wb") as f:
-                f.write(b"\0" * shared_size)
-        try:
-            os.chmod(shared_memory_path, 0o777)
-        except PermissionError:
-            print("[WARN] 无法修改权限，请手动 chmod 777")
 
 
 def init_shared_memory():
     global use_shared_memory, mapfile, fd
 
-    ensure_shared_memory()
 
     try:
         fd = os.open(shared_memory_path, os.O_RDONLY)

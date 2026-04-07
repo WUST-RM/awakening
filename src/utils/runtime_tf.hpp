@@ -55,15 +55,19 @@ public:
         buffers_[size_t(parent)][size_t(child)].buffer.push(t, pose_in_parent);
         return true;
     }
+
     ISO3 pose_a_in_b(FrameEnum a, FrameEnum b, const TimePoint& t) const {
         auto path = find_path(b, a);
         if (!path) {
             if constexpr (Static) {
                 throw std::runtime_error(
-                    "No path from " + std::to_string(size_t(a)) + " to " + std::to_string(size_t(b))
+                    "No path from " + std::to_string(std::to_underlying(a)) + " to "
+                    + std::to_string(std::to_underlying(b))
                 );
             } else {
-                std::cout<< "No path from " + std::to_string(size_t(a)) + " to " + std::to_string(size_t(b))<<std::endl;
+                std::cout << "No path from " + std::to_string(std::to_underlying(a)) + " to "
+                        + std::to_string(std::to_underlying(b))
+                          << std::endl;
                 return ISO3::Identity();
             }
         }

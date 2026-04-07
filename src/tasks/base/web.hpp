@@ -129,7 +129,7 @@ inline void write_log(const char* key, Func&& f) {
 template<typename T, int MAX_N>
 class DatasStream {
 public:
-    DatasStream(const std::string& n, nlohmann::json& _j): j(_j) {
+    DatasStream(const std::string& n, nlohmann::json& _j, std::mutex& m): j(_j), mtx(m) {
         name = n;
     }
     void handle_once(const T& t) {
@@ -146,6 +146,7 @@ public:
         }
     }
     void insert_data(nlohmann::json& _j) {
+        std::lock_guard<std::mutex> lock(mtx);
         _j[name] = log_data;
     }
     void clear() {
@@ -156,6 +157,7 @@ private:
     std::string name;
     std::vector<T> log_data;
     nlohmann::json& j;
+    std::mutex& mtx;
 };
 struct DebugDatas {
     nlohmann::json j;
@@ -174,7 +176,7 @@ struct DebugDatas {
     X(double, 100, fly_time) \
     X(double, 100, target_v_yaw)
 
-#define GEN_LOG(TYPE, SIZE, NAME) DatasStream<TYPE, SIZE> NAME##_log { #NAME, j };
+#define GEN_LOG(TYPE, SIZE, NAME) DatasStream<TYPE, SIZE> NAME##_log { #NAME, j, mtx };
 
 #define X(TYPE, SIZE, NAME) GEN_LOG(TYPE, SIZE, NAME)
     DEBUG_LOG_LIST(X)
@@ -185,10 +187,11 @@ struct DebugDatas {
         DEBUG_LOG_LIST(X)
 #undef X
     }
+    std::mutex mtx;
     void write() {
         const std::string path = "/dev/shm/awakening_data.json";
         const std::string tmp_path = path + ".tmp";
-
+        std::lock_guard<std::mutex> lock(mtx);
         {
             std::ofstream tmp_file(tmp_path, std::ios::out | std::ios::trunc);
             if (!tmp_file.is_open())
