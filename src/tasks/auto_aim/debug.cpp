@@ -22,7 +22,9 @@ void draw_auto_aim(cv::Mat& img, const AutoAimDebugCtx& ctx) {
     auto fsm = ctx.fsm_state();
     const cv::Rect img_rect(0, 0, img.cols, img.rows);
     const cv::Rect roi = ctx.expanded() & img_rect;
-    cv::rectangle(img, roi, cv::Scalar(255, 255, 255), 2);
+    if (roi.width > 0 && roi.height > 0) {
+        cv::rectangle(img, roi, cv::Scalar(255, 255, 255), 2);
+    }
     armors.draw(img);
     if (armor_target.check()) {
         auto target_state = armor_target.get_target_state();

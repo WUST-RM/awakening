@@ -116,9 +116,9 @@ inline LogBuffer& get_log_buffer() {
 template<typename Func>
 inline void write_log(const char* key, Func&& f) {
     auto& buf = get_log_buffer();
-    static std::mutex mtx;
+    // static std::mutex mtx;
     {
-        std::lock_guard<std::mutex> lock(mtx);
+        std::lock_guard<std::mutex> lock(buf.mtx);
         auto& j = buf.j[key];
         f(j);
         buf.dirty = true;

@@ -304,4 +304,37 @@ inline std::vector<cv::Point2f> reprojection(
     double d = std::remainder(a1 - a0, 2.0 * M_PI);
     return a0 + t * d;
 }
+[[nodiscard]] inline Vec3 load_vec3(const YAML::Node& node) {
+    auto vec = node.as<std::vector<double>>();
+    return Vec3(vec[0], vec[1], vec[2]);
+}
+[[nodiscard]] inline Mat3 load_mat3(const YAML::Node& node) {
+    Mat3 result;
+
+    if (node.IsSequence() && node.size() == 9) {
+        // 一维数组
+        auto vec = node.as<std::vector<double>>();
+        for (int i = 0; i < 9; ++i) {
+            result(i / 3, i % 3) = vec[i];
+        }
+    } else {
+        // 二维数组
+        auto mat = node.as<std::vector<std::vector<double>>>();
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 3; ++j) {
+                result(i, j) = mat[i][j];
+            }
+        }
+    }
+
+    return result;
+}
+[[nodiscard]] inline ISO3 load_isometry3(const YAML::Node& node) {
+    auto trans = load_vec3(node["t"]);
+    auto rot = load_mat3(node["R"]);
+    ISO3 result = ISO3::Identity();
+    result.translation() = trans;
+    result.linear() = rot;
+    return result;
+}
 } // namespace awakening::utils

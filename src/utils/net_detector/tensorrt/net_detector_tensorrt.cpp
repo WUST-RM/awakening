@@ -1,26 +1,27 @@
-#include "net_detector_tensorrt.hpp"
-#include "utils/buffer.hpp"
-#include "utils/common/image.hpp"
-#include "utils/cuda/letter_box.hpp"
-#include "utils/logger.hpp"
-#include <NvOnnxParser.h>
-#include <array>
-#include <cuda_runtime.h>
-#include <fstream>
-#include <memory>
-#include <opencv2/core/hal/interface.h>
-#include <opencv2/highgui.hpp>
-#include <string>
+#ifdef USE_TRT
+    #include "net_detector_tensorrt.hpp"
+    #include "utils/buffer.hpp"
+    #include "utils/common/image.hpp"
+    #include "utils/cuda/letter_box.hpp"
+    #include "utils/logger.hpp"
+    #include <NvOnnxParser.h>
+    #include <array>
+    #include <cuda_runtime.h>
+    #include <fstream>
+    #include <memory>
+    #include <opencv2/core/hal/interface.h>
+    #include <opencv2/highgui.hpp>
+    #include <string>
 namespace awakening::utils {
-#define TRT_CHECK(expr) \
-    do { \
-        const auto _ret = (expr); \
-        if (_ret != cudaSuccess) { \
-            std::cerr << "\033[31mCUDA error: " << cudaGetErrorString(_ret) << " (" << #expr \
-                      << ")\033[0m\n"; \
-            std::abort(); \
-        } \
-    } while (0)
+    #define TRT_CHECK(expr) \
+        do { \
+            const auto _ret = (expr); \
+            if (_ret != cudaSuccess) { \
+                std::cerr << "\033[31mCUDA error: " << cudaGetErrorString(_ret) << " (" << #expr \
+                          << ")\033[0m\n"; \
+                std::abort(); \
+            } \
+        } while (0)
 struct NetDetectorTensorrt::Impl {
     struct Params {
         std::string model_path;
@@ -294,3 +295,4 @@ NetDetectorTensorrt::detect(const cv::Mat& img, PixelFormat format) noexcept {
     return _impl->detect(img, format);
 }
 } // namespace awakening::utils
+#endif

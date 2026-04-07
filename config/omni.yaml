@@ -1,5 +1,5 @@
 enemy_color: red
-
+max_infer_num: 5
 bullet_speed: 23.0
 
 serial:
@@ -17,6 +17,13 @@ player:
   enable: false
   path: ""
 
+tf:
+  camera_in_gimbal:
+    t: [0.14,0.05,0.0]
+    R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
+  shoot_in_gimbal:
+    t: [0.0,0.0,0.0]
+    R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
 
 
 auto_exposure:
@@ -83,16 +90,16 @@ armor_tracker:
 auto_aim_fsm:
   single_whole_up: 1.5 
   single_whole_down: 1.0
-  whole_pair_up: 5.5 
-  whole_pair_down: 3.5 #1s内至少换2次板子  2pi  否则轨迹规划无意义
+  whole_pair_up: 6.5 
+  whole_pair_down: 7.5 #1s内至少换2次板子  2pi  否则轨迹规划无意义
   pair_center_up: 16.5
   pair_center_down: 15.0
   transfer_thresh: 50
 
 
 very_aimer:
-  base_yaw_offset: 0.0
-  base_pitch_offset: 0.0
+  base_yaw_offset: -1.0
+  base_pitch_offset: -2.0
   sample_total_time: 2.0
   
   sample_horizon: 500
@@ -106,7 +113,7 @@ very_aimer:
 
   prediction_delay: 0.00
   aim_center_more_prediction_time: 0.0
-  comming_angle: 55
+  comming_angle: 65
   leaving_angle: 20
 
   yaw_limit_deg: 60

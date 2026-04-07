@@ -3,8 +3,12 @@
 #include "tasks/auto_aim/type.hpp"
 #include "utils/logger.hpp"
 #include "utils/net_detector/net_detector_base.hpp"
-#include "utils/net_detector/openvino/net_detector_openvino.hpp"
-#include "utils/net_detector/tensorrt/net_detector_tensorrt.hpp"
+#if USE_OPENVINO
+    #include "utils/net_detector/openvino/net_detector_openvino.hpp"
+#endif
+#ifdef USE_TRT
+    #include "utils/net_detector/tensorrt/net_detector_tensorrt.hpp"
+#endif
 #include <fstream>
 #include <memory>
 #include <opencv2/highgui.hpp>
@@ -59,17 +63,26 @@ struct ArmorDetector::Impl {
             .target_w = armor_infer_->inputW(),
             .target_h = armor_infer_->inputH(),
         };
+        bool backend_valid = false;
+#ifdef USE_OPENVINO
         if (backend == OPENVINO) {
+            backend_valid = true;
             net_detector_ = std::make_unique<utils::NetDetectorOpenVINO>(
                 config["net_detector"][OPENVINO],
                 net_cfg
             );
-        } else if (backend == TENSORRT) {
+        }
+#endif
+#ifdef USE_TRT
+        if (backend == TENSORRT) {
+            backend_valid = true;
             net_detector_ = std::make_unique<utils::NetDetectorTensorrt>(
                 config["net_detector"][TENSORRT],
                 net_cfg
             );
-        } else {
+        }
+#endif
+        if (!backend_valid) {
             throw std::runtime_error("Invalid backend");
         }
     }

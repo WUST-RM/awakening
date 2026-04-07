@@ -47,7 +47,7 @@ if(BUILD_WITH_TRT)
     set(CMAKE_CUDA_COMPILER /usr/local/cuda/bin/nvcc)
     set(CMAKE_CUDA_ARCHITECTURES 86)
     enable_language(CUDA)
-    set(CMAKE_CUDA_STANDARD 20)
+    set(CMAKE_CUDA_STANDARD 17)
     set(CMAKE_CUDA_STANDARD_REQUIRED ON)
     set(CMAKE_CUDA_COMPILER_LAUNCHER ccache)
 

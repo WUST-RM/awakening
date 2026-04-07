@@ -63,6 +63,7 @@ public:
                     "No path from " + std::to_string(size_t(a)) + " to " + std::to_string(size_t(b))
                 );
             } else {
+                std::cout<< "No path from " + std::to_string(size_t(a)) + " to " + std::to_string(size_t(b))<<std::endl;
                 return ISO3::Identity();
             }
         }

@@ -67,7 +67,8 @@ if [[ "$1" == "build" || "$1" == "rebuild" || "$1" == "run" ]]; then
     echo -e "${yellow}<--- Start CMake (Ninja) --->${reset}"
     cmake -S "$WORK_DIR" -B "$BUILD_DIR" \
         -G Ninja \
-
+        -DCMAKE_C_COMPILER=clang \
+        -DCMAKE_CXX_COMPILER=clang++ 
     if [ $? -ne 0 ]; then
         echo -e "${red}\n--- CMake Failed ---${reset}"
         exit 1
@@ -141,7 +142,7 @@ if [[ "$1" == "build" || "$1" == "rebuild" || "$1" == "run" ]]; then
             fi
 
             echo -e "${yellow}Starting guard.sh ...${reset}"
-            exec "$GUARD_SCRIPT" "$TARGET_PATH" "$@"
+            # exec "$GUARD_SCRIPT" "$TARGET_PATH" "$@"
         fi
     fi
 

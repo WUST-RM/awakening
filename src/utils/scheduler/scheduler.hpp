@@ -12,6 +12,8 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
+#include <queue>
+#include <mutex>
 
 #include <tbb/task_arena.h>
 #include <tbb/task_group.h>
@@ -22,6 +24,7 @@ class Scheduler {
 public:
     using clock = std::chrono::steady_clock;
     inline static unsigned int __hardware_concurrency = (std::thread::hardware_concurrency());
+
     explicit Scheduler(size_t threads = __hardware_concurrency):
         worker_count(threads ? threads : 1),
         arena(worker_count) {}
@@ -69,10 +72,8 @@ public:
         using NodeT = SourceNode<OutputPairs...>;
         using FuncT = typename NodeT::Func;
 
-        static_assert(
-            std::is_convertible_v<Fn, FuncT>,
-            "Fn must be convertible to SourceNode::Func"
-        );
+        static_assert(std::is_convertible_v<Fn, FuncT>,
+                      "Fn must be convertible to SourceNode::Func");
 
         auto& base = source_snapshot[snap_id];
 
@@ -84,13 +85,13 @@ public:
         schedule(local);
     }
 
-    template<int CoreId, typename... OutputPairs, typename Fn>
+    template<typename... OutputPairs, typename Fn>
     void add_rate_source(std::string n, double rate, Fn&& fn) {
-        static_assert(CoreId >= 0, "CoreId must be >= 0");
+        // static_assert(CoreId >= 0, "CoreId must be >= 0");
 
-        if (CoreId >= static_cast<int>(__hardware_concurrency)) {
-            throw std::runtime_error("CoreId exceeds hardware concurrency");
-        }
+        // if (CoreId >= static_cast<int>(__hardware_concurrency)) {
+        //     throw std::runtime_error("CoreId exceeds hardware concurrency");
+        // }
 
         if (rate <= 0.0) {
             throw std::invalid_argument("rate must be > 0");
@@ -106,7 +107,7 @@ public:
 
         connect(node);
 
-        rate_workers.emplace_back(RateWorker { node, rate, CoreId });
+        rate_workers.emplace_back(RateWorker { node, rate });
     }
 
     void run() {
@@ -115,7 +116,7 @@ public:
 
         for (auto& w: rate_workers) {
             rate_threads.emplace_back([this, w](std::stop_token st) {
-                bind_cpu(w.core_id);
+                // bind_cpu(w.core_id);
 
                 const auto period = std::chrono::duration_cast<clock::duration>(
                     std::chrono::duration<double>(1.0 / w.rate)
@@ -126,10 +127,9 @@ public:
                 while (!st.stop_requested() && running.load(std::memory_order_acquire)) {
                     next_time += period;
 
-                    execute_node(w.node);
+                    schedule(w.node);  
 
                     auto now = clock::now();
-
                     if (now > next_time) {
                         next_time = now;
                         continue;
@@ -151,9 +151,13 @@ public:
         }
 
         rate_threads.clear();
+
+        tg.cancel(); 
         arena.execute([this] { tg.wait(); });
+
         AWAKENING_INFO("awakening Scheduler stopped");
     }
+
     void build() {
         if (built)
             return;
@@ -193,7 +197,7 @@ private:
     struct RateWorker {
         NodeBase::Ptr node;
         double rate;
-        int core_id;
+        // int core_id;
     };
 
     void bind_cpu(int core_id) {
@@ -205,14 +209,36 @@ private:
 #endif
     }
 
+
     void schedule(NodeBase::Ptr node) {
         if (!node || !running.load(std::memory_order_acquire))
             return;
 
-        arena.execute([this, node] { tg.run([this, node] { execute_node(node); }); });
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex);
+            task_queue.push(node);
+        }
+
+
+        arena.execute([this] {
+            tg.run([this] {
+                process_queue();
+            });
+        });
     }
 
-    void execute_node(NodeBase::Ptr node) {
+    void process_queue() {
+        NodeBase::Ptr node;
+
+        {
+            std::lock_guard<std::mutex> lock(queue_mutex);
+            if (task_queue.empty())
+                return;
+
+            node = task_queue.front();
+            task_queue.pop();
+        }
+
         const auto& next = node->execute();
 
         for (auto& n: next) {
@@ -239,7 +265,6 @@ private:
     size_t worker_count;
 
     std::unordered_map<std::type_index, std::vector<NodeBase::Ptr>> static_tasks_snapshot;
-
     std::vector<NodeBase::Ptr> source_snapshot;
 
     std::vector<RateWorker> rate_workers;
@@ -250,6 +275,8 @@ private:
 
     std::atomic<bool> running { false };
     bool built { false };
+    std::queue<NodeBase::Ptr> task_queue;
+    std::mutex queue_mutex;
 };
 
 } // namespace awakening

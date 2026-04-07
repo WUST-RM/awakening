@@ -1,14 +1,15 @@
-#include "net_detector_openvino.hpp"
-#include "openvino/openvino.hpp"
-#include "utils/logger.hpp"
-#include "utils/net_detector/net_detector_base.hpp"
-#include "utils/utils.hpp"
-#include <atomic>
-#include <openvino/core/type/element_type.hpp>
-#include <openvino/runtime/properties.hpp>
-#include <optional>
-#include <string>
-#include <utility>
+#ifdef USE_OPENVINO
+    #include "net_detector_openvino.hpp"
+    #include "openvino/openvino.hpp"
+    #include "utils/logger.hpp"
+    #include "utils/net_detector/net_detector_base.hpp"
+    #include "utils/utils.hpp"
+    #include <atomic>
+    #include <openvino/core/type/element_type.hpp>
+    #include <openvino/runtime/properties.hpp>
+    #include <optional>
+    #include <string>
+    #include <utility>
 namespace awakening::utils {
 struct NetDetectorOpenVINO::Impl {
     struct Params {
@@ -235,3 +236,4 @@ NetDetectorOpenVINO::detect(const cv::Mat& img, PixelFormat format) noexcept {
     return _impl->detect(img, format);
 }
 } // namespace awakening::utils
+#endif

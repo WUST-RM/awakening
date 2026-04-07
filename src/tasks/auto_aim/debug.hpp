@@ -4,6 +4,7 @@
 #include "tasks/auto_aim/type.hpp"
 #include "tasks/base/common.hpp"
 #include "utils/buffer.hpp"
+#include <mutex>
 #include <opencv2/core/types.hpp>
 #include <utility>
 namespace awakening::auto_aim {
@@ -11,7 +12,8 @@ struct AutoAimDebugCtx {
     CameraInfo camera_info_;
     utils::SWMR<Armors> armors_buffer;
     utils::SWMR<ArmorTarget> armor_target_buffer;
-    utils::SWMR<ImageFrame> img_frame_buffer;
+    mutable std::mutex img_frame_mutex;
+    ImageFrame img_frame_buffer;
     utils::SWMR<cv::Rect> expanded_buffer;
     utils::SWMR<double> avg_latency_ms_buffer;
     utils::SWMR<GimbalCmd> gimbal_cmd_buffer;
@@ -23,8 +25,13 @@ struct AutoAimDebugCtx {
     ArmorTarget armor_target() const noexcept {
         return armor_target_buffer.read();
     }
+    void set_img_frame(const ImageFrame& img_frame) {
+        std::lock_guard<std::mutex> lock(img_frame_mutex);
+        img_frame_buffer = img_frame;
+    }
     ImageFrame img_frame() const noexcept {
-        return img_frame_buffer.read();
+        std::lock_guard<std::mutex> lock(img_frame_mutex);
+        return img_frame_buffer;
     }
     CameraInfo camera_info() const noexcept {
         return camera_info_;

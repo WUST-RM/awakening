@@ -30,11 +30,16 @@
 #include "utils/semaphore_guard.hpp"
 #include "utils/signal_guard.hpp"
 #include "utils/utils.hpp"
+
+#include "backward-cpp/backward.hpp"
+namespace backward {
+static backward::SignalHandling sh;
+}
 using namespace awakening;
 
 enum class SimpleFrame : int { ODOM, GIMBAL_ODOM, GIMBAL, CAMERA, CAMERA_CV, SHOOT, N };
 
-using SimpleRobotTF = utils::tf::RobotTF<SimpleFrame, static_cast<size_t>(SimpleFrame::N), true>;
+using SimpleRobotTF = utils::tf::RobotTF<SimpleFrame, static_cast<size_t>(SimpleFrame::N), false>;
 
 std::string SimpleFrame_to_str(int frame) {
     constexpr const char* details[] = { "odom",   "gimbal_odom", "gimbal",
@@ -97,7 +102,7 @@ struct LogCtx {
 };
 static constexpr auto RECORD_FOLDER_PATH_ARR = utils::concat(ROOT_DIR, "/record/auto_aim");
 static constexpr std::string_view RECORD_FOLDER_PATH(RECORD_FOLDER_PATH_ARR.data());
-inline std::string generate_log_filename(const std::string& folder_path) {
+inline std::string generate_record_filename(const std::string& folder_path) {
     auto now = std::chrono::system_clock::now();
     auto t = std::chrono::system_clock::to_time_t(now);
     std::tm tm {};
@@ -138,7 +143,7 @@ int main(int argc, char** argv) {
     std::unique_ptr<Recorder> recorder;
     if (config["recorder"]["enable"].as<bool>()) {
         recorder =
-            std::make_unique<Recorder>(generate_log_filename(std::string(RECORD_FOLDER_PATH)));
+            std::make_unique<Recorder>(generate_record_filename(std::string(RECORD_FOLDER_PATH)));
     }
     std::unique_ptr<Player> player;
     if (!recorder) {
@@ -146,7 +151,6 @@ int main(int argc, char** argv) {
             player = std::make_unique<Player>(config["player"]["path"].as<std::string>());
         }
     }
-
     Scheduler s;
     EnemyColor enemy_color = enemy_color_from_string(config["enemy_color"].as<std::string>());
     double bullet_speed = config["bullet_speed"].as<double>();
@@ -202,15 +206,10 @@ int main(int argc, char** argv) {
         cv_in_camera.translation() = Vec3(0, 0, 0);
         cv_in_camera.linear() = R_CV2PHYSICS;
         tf->push(SimpleFrame::CAMERA, SimpleFrame::CAMERA_CV, Clock::now(), cv_in_camera);
-        ISO3 camera_in_gimbal = ISO3::Identity();
-        camera_in_gimbal.translation() = Vec3(0.0, 0, 0.1);
+        ISO3 camera_in_gimbal = utils::load_isometry3(config["tf"]["camera_in_gimbal"]);
         tf->push(SimpleFrame::GIMBAL, SimpleFrame::CAMERA, Clock::now(), camera_in_gimbal);
-        ISO3 shoot_in_gimbal = ISO3::Identity();
-        shoot_in_gimbal.translation() = Vec3(0.1, 0.0, 0.0);
+        ISO3 shoot_in_gimbal = utils::load_isometry3(config["tf"]["shoot_in_gimbal"]);
         tf->push(SimpleFrame::GIMBAL, SimpleFrame::SHOOT, Clock::now(), shoot_in_gimbal);
-        ISO3 gimbal_odom_in_odom = ISO3::Identity();
-        gimbal_odom_in_odom.translation() = Vec3(0, 0, .0);
-        tf->push(SimpleFrame::ODOM, SimpleFrame::GIMBAL_ODOM, Clock::now(), gimbal_odom_in_odom);
     }
 
     s.register_task<CameraIO, CommonFrameIo>("push_common_frame", [&](CameraIO::second_type&& f) {
@@ -220,7 +219,6 @@ int main(int argc, char** argv) {
             utils::dt_once(
                 [&]() {
                     recorder->record<CameraTag>(f);
-                    std::cout << "record" << std::endl;
                 },
                 std::chrono::milliseconds(100)
             );
@@ -232,6 +230,27 @@ int main(int argc, char** argv) {
             .expanded = cv::Rect(0, 0, frame.img_frame.src_img.cols, frame.img_frame.src_img.rows),
             .offset = cv::Point2f(0, 0),
         };
+        auto target = armor_target.read();
+        if (target.check()) {
+            auto camera_cv_in_old = tf->pose_a_in_b(
+                SimpleFrame(frame.frame_id),
+                SimpleFrame(target.get_target_state().frame_id),
+                frame.img_frame.timestamp
+            );
+            target.set_target_state([&](armor_motion_model::State& state) {
+                state.predict(frame.img_frame.timestamp);
+            });
+            auto bbox = target.expanded(
+                frame.img_frame.timestamp,
+                camera_cv_in_old,
+                camera_info,
+                frame.img_frame.src_img.size()
+            );
+            if (bbox.area() > 200) {
+                frame.expanded = bbox;
+                frame.offset = cv::Point2f(bbox.x, bbox.y);
+            }
+        }
         return std::make_tuple(std::optional<CommonFrameIo::second_type>(std::move(frame)));
     });
     if (serial) {
@@ -293,7 +312,7 @@ int main(int argc, char** argv) {
                 auto& cfg = auto_exposure_cfg.value();
                 utils::dt_once(
                     [&]() {
-                        cv::Mat img = frame.img_frame.src_img;
+                        cv::Mat img = frame.img_frame.src_img(frame.expanded);
                         cv::Mat gray;
                         cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
                         const double brightness = cv::mean(gray)[0];
@@ -323,29 +342,10 @@ int main(int argc, char** argv) {
     s.register_task<CommonFrameIo, DetIo>("detector", [&](CommonFrameIo::second_type&& frame) {
         static std::unique_ptr<std::counting_semaphore<>> detector_sem;
         if (!detector_sem) {
-            detector_sem = std::make_unique<std::counting_semaphore<>>(5);
+            detector_sem =
+                std::make_unique<std::counting_semaphore<>>(config["max_infer_num"].as<int>());
         }
-        auto target = armor_target.read();
-        if (target.check()) {
-            auto camera_cv_in_odom = tf->pose_a_in_b(
-                SimpleFrame::CAMERA_CV,
-                SimpleFrame::ODOM,
-                frame.img_frame.timestamp
-            );
-            target.set_target_state([&](armor_motion_model::State& state) {
-                state.predict(frame.img_frame.timestamp);
-            });
-            auto bbox = target.expanded(
-                frame.img_frame.timestamp,
-                camera_cv_in_odom,
-                camera_info,
-                frame.img_frame.src_img.size()
-            );
-            if (bbox.area() > 200) {
-                frame.expanded = bbox;
-                frame.offset = cv::Point2f(bbox.x, bbox.y);
-            }
-        }
+        
         auto_aim::Armors armors { .timestamp = frame.img_frame.timestamp,
                                   .id = frame.id,
                                   .frame_id = frame.frame_id };
@@ -361,7 +361,7 @@ int main(int argc, char** argv) {
         auto batch_armors = armors_queue.dequeue_batch();
         if (auto_aim_dbg) {
             auto_aim_dbg->expanded_buffer.write(frame.expanded);
-            auto_aim_dbg->img_frame_buffer.write(std::move(frame.img_frame.clone()));
+            auto_aim_dbg->set_img_frame(std::move(frame.img_frame.clone()));
         }
 
         return std::make_tuple(std::optional<DetIo::second_type>(std::move(batch_armors)));
@@ -380,7 +380,7 @@ int main(int argc, char** argv) {
                 armors.armors.push_back(a);
             }
             auto camera_cv_in_odom =
-                tf->pose_a_in_b(SimpleFrame::CAMERA_CV, SimpleFrame::ODOM, armors.timestamp);
+                tf->pose_a_in_b(SimpleFrame(armors.frame_id), SimpleFrame::ODOM, armors.timestamp);
             armors.frame_id = std::to_underlying(SimpleFrame::ODOM);
             auto __armor_target =
                 armor_tracker.track(armors, camera_info, camera_cv_in_odom, armors.frame_id);
@@ -412,7 +412,7 @@ int main(int argc, char** argv) {
             log_ctx.track_count++;
         }
     });
-    s.add_rate_source<0>("slover", 1000.0, [&]() {
+    s.add_rate_source<>("slover", 1000.0, [&]() {
         log_ctx.solve_count++;
         auto target = armor_target.read();
         auto old_in_gimbal_odom = tf->pose_a_in_b(
@@ -442,6 +442,8 @@ int main(int argc, char** argv) {
             send.yaw = cmd.yaw;
             send.pitch = cmd.pitch;
             send.v_yaw = cmd.v_yaw;
+            send.target_yaw = cmd.target_yaw;
+            send.target_pitch =cmd.target_pitch;
             send.v_pitch = cmd.v_pitch;
             send.a_yaw = cmd.a_yaw;
             send.a_pitch = cmd.a_pitch;
@@ -459,7 +461,7 @@ int main(int argc, char** argv) {
             auto_aim_dbg->gimbal_cmd_buffer.write(cmd);
         }
     });
-    s.add_rate_source<1>("logger", 1.0, [&]() {
+    s.add_rate_source<>("logger", 1.0, [&]() {
         double avg_latency_ms = log_ctx.latency_ms_total / log_ctx.track_count;
         AWAKENING_INFO(
             "detect: {} track: {} found: {} solve: {} serial: {} camera: {} avg_latency: {:.3} ms",
@@ -477,8 +479,9 @@ int main(int argc, char** argv) {
         log_ctx.reset();
     });
     if (auto_aim_dbg) {
-        s.add_rate_source<2>("debug", 60.0, [&]() {
+        s.add_rate_source<>("debug", 60.0, [&]() {
             auto target = armor_target.read();
+            target.write_log();
             auto old_in_camera_cv = tf->pose_a_in_b(
                 SimpleFrame(target.get_target_state().frame_id),
                 SimpleFrame::CAMERA_CV,
@@ -487,7 +490,7 @@ int main(int argc, char** argv) {
             target.set_target_state([&](armor_motion_model::State& state) {
                 state.transform(old_in_camera_cv, std::to_underlying(SimpleFrame::CAMERA_CV));
             });
-            target.write_log();
+            
             auto_aim_dbg->armor_target_buffer.write(target);
             auto_aim_dbg->fsm_state_buffer.write(auto_aim_fsm_controller.get_state());
             auto gimbal_in_gimbal_odom =
@@ -505,7 +508,7 @@ int main(int argc, char** argv) {
             }
         });
 #ifdef USE_ROS2
-        s.add_rate_source<1>("tf_pub", 100.0, [&]() {
+        s.add_rate_source<>("tf_pub", 100.0, [&]() {
             rcl_tf.pub_robot_tf(*tf, [](SimpleFrame frame) { return SimpleFrame_to_str(frame); });
         });
 #endif
@@ -535,9 +538,13 @@ int main(int argc, char** argv) {
     }
     s.build();
     s.run();
+#ifdef USE_ROS2
     std::thread([&]() { rcl_node.spin(); }).detach();
+#endif
     utils::SignalGuard::spin(std::chrono::milliseconds(1000));
     s.stop();
+#ifdef USE_ROS2
     rcl_node.shutdown();
+#endif
     return 0;
 }

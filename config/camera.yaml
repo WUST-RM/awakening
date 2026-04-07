@@ -3,7 +3,7 @@ type: hik_camera
 
 
 hik_camera:
-  target_sn: DA1094115
+  target_sn: DA3038891
   adc_bit_depth: Bits_8
   pixel_format: BayerRG8 #RGB8Packed
   reverse_x: false
