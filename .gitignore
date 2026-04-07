@@ -5,7 +5,7 @@ devel
 install
 
 log/*
-
+record/*
 .catkin_workspace
 
 .vscode
