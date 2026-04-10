@@ -8,7 +8,9 @@
 #include "utils/utils.hpp"
 #include <algorithm>
 #include <opencv2/core/mat.hpp>
+#include <opencv2/core/types.hpp>
 #include <utility>
+#include <vector>
 namespace awakening::auto_aim {
 ArmorTarget::ArmorTarget(
     const Armor& _a,
@@ -465,5 +467,39 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(
     square &= img_rect;
 
     return square;
+}
+[[nodiscard]] cv::Rect ArmorTarget::expanded(
+    const TimePoint& timestamp,
+    const ISO3& camera_cv_in_odom,
+    const CameraInfo& camera_info,
+    const cv::Size& image_size
+) const noexcept {
+    std::vector<cv::Point2f> pts;
+    auto tmp_target_state = target_state;
+    tmp_target_state.predict(timestamp);
+    const int armors_num = armor_num();
+    for (int id = 0; id < armors_num; ++id) {
+        Measure::Ctx tmp_ctx {
+            .armor_num = armors_num,
+            .id = id,
+            .camera_cv_in_odom = camera_cv_in_odom,
+            .camera_info = camera_info,
+            .armor_number = target_number,
+
+        };
+        Measure measure { .ctx = tmp_ctx };
+        VecZ z_pred;
+        measure.h(target_state.x, z_pred);
+        pts.push_back(cv::Point2f(z_pred[idx::LEFT_TOP_X], z_pred[idx::LEFT_TOP_Y]));
+        pts.push_back(cv::Point2f(z_pred[idx::RIGHT_TOP_X], z_pred[idx::RIGHT_TOP_Y]));
+        pts.push_back(cv::Point2f(z_pred[idx::RIGHT_BOTTOM_X], z_pred[idx::RIGHT_BOTTOM_Y]));
+        pts.push_back(cv::Point2f(z_pred[idx::LEFT_BOTTOM_X], z_pred[idx::LEFT_BOTTOM_Y]));
+    }
+    cv::Rect rect = cv::boundingRect(pts);
+    const cv::Rect img_rect(0, 0, image_size.width, image_size.height);
+    if ((rect & img_rect).area() <= 0) {
+        return cv::Rect(0, 0, image_size.width, image_size.height);
+    }
+    return rect;
 }
 } // namespace awakening::auto_aim

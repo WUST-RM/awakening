@@ -10,7 +10,10 @@
     #include "_rcl/visual/armor.hpp"
     #include "_rcl/visual/armor_target.hpp"
 #endif
+#include "backward-cpp/backward.hpp"
 #include "param_deliver.h"
+#include "sensor_msgs/msg/camera_info.hpp"
+#include "sensor_msgs/msg/image.hpp"
 #include "tasks/auto_aim/armor_control/very_aimer.hpp"
 #include "tasks/auto_aim/armor_detect/armor_detector.hpp"
 #include "tasks/auto_aim/armor_tracker/armor_target.hpp"
@@ -33,10 +36,6 @@
 #include "utils/semaphore_guard.hpp"
 #include "utils/signal_guard.hpp"
 #include "utils/utils.hpp"
-
-#include "backward-cpp/backward.hpp"
-#include "sensor_msgs/msg/camera_info.hpp"
-#include "sensor_msgs/msg/image.hpp"
 namespace backward {
 static backward::SignalHandling sh;
 }

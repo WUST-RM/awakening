@@ -83,6 +83,12 @@ public:
         const CameraInfo& camera_info,
         const cv::Size& image_size
     ) const noexcept;
+    [[nodiscard]] cv::Rect expanded(
+        const TimePoint& timestamp,
+        const ISO3& camera_cv_in_odom,
+        const CameraInfo& camera_info,
+        const cv::Size& image_size
+    ) const noexcept;
     [[nodiscard]] Eigen::Matrix<double, Z_N, Z_N>
     measurement_covariance(const Eigen::Matrix<double, Z_N, 1>& z) const noexcept;
     [[nodiscard]] Eigen::Matrix<double, X_N, X_N> process_noise(double dt) const noexcept;
@@ -122,7 +128,7 @@ public:
                 < cfg.lost_time_thres;
         return v;
     }
-    [[nodiscard]] int armor_num() {
+    [[nodiscard]] int armor_num() const noexcept {
         return measure_ctx.armor_num;
     }
     void write_log() {

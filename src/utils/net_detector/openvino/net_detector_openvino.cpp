@@ -53,14 +53,14 @@ struct NetDetectorOpenVINO::Impl {
             throw std::runtime_error("Invalid scheduling_core_type: " + s);
         }
 
-        static ov::hint::ModelDistributionPolicy modelDistFromString(const std::string& s) {
-            auto v = to_upper(s);
-            if (v == "TENSOR_PARALLEL")
-                return ov::hint::ModelDistributionPolicy::TENSOR_PARALLEL;
-            if (v == "PIPELINE_PARALLEL")
-                return ov::hint::ModelDistributionPolicy::PIPELINE_PARALLEL;
-            throw std::runtime_error("Invalid model_distribution_policy: " + s);
-        }
+        // static ov::hint::ModelDistributionPolicy modelDistFromString(const std::string& s) {
+        //     auto v = to_upper(s);
+        //     if (v == "TENSOR_PARALLEL")
+        //         return ov::hint::ModelDistributionPolicy::TENSOR_PARALLEL;
+        //     if (v == "PIPELINE_PARALLEL")
+        //         return ov::hint::ModelDistributionPolicy::PIPELINE_PARALLEL;
+        //     throw std::runtime_error("Invalid model_distribution_policy: " + s);
+        // }
 
         static ov::hint::ExecutionMode execModeFromString(const std::string& s) {
             auto v = to_upper(s);
@@ -99,12 +99,23 @@ struct NetDetectorOpenVINO::Impl {
         }
 
         [[nodiscard]] ov::AnyMap anyMap() const {
-            return ov::AnyMap {
-                ov::hint::performance_mode(perf_mode.value()),
-                // ov::hint::model_priority(priority),
-                ov::hint::scheduling_core_type(scheduling_core_type.value()),
-                ov::hint::execution_mode(execution_mode.value()),
-            };
+            ov::AnyMap m;
+
+            if (perf_mode.has_value()) {
+                m.emplace(ov::hint::performance_mode(perf_mode.value()));
+            }
+
+            if (execution_mode.has_value()) {
+                m.emplace(ov::hint::execution_mode(execution_mode.value()));
+            }
+
+            if (scheduling_core_type.has_value()) {
+                if (device_name.find("CPU") != std::string::npos) {
+                    m.emplace(ov::hint::scheduling_core_type(scheduling_core_type.value()));
+                }
+            }
+
+            return m;
         }
     } params_;
 

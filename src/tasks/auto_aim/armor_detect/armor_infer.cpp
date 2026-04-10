@@ -324,7 +324,6 @@ struct ArmorInfer::Impl {
             net.color = ModelTraits<Mode::TUP>::COLORS[color_id.x];
             net.number = ModelTraits<Mode::TUP>::CLASSES[class_id.x];
             auto& key_points = net.key_points;
-
             key_points.points[std::to_underlying(I::LEFT_TOP)] = cv::Point2f(x1, y1);
             key_points.points[std::to_underlying(I::LEFT_BOTTOM)] = cv::Point2f(x2, y2);
             key_points.points[std::to_underlying(I::RIGHT_BOTTOM)] = cv::Point2f(x3, y3);
