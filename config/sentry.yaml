@@ -52,9 +52,8 @@ armor_detector:
       model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
       device_name: "GPU"
       perf_mode: "THROUGHPUT"
-      # priority: "MEDIUM"
+      priority: "HIGH"
       # scheduling_core_type: "PCORE_ONLY"
-      model_distribution_policy: "TENSOR_PARALLEL"
       execution_mode: "PERFORMANCE"
     tensorrt:
       model_path: ${ROOT_DIR}/model/opt-1208-001.onnx

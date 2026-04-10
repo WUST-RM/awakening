@@ -50,11 +50,10 @@ armor_detector:
     backend: tensorrt
     openvino:
       model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
-      device_name: "CPU"
-      perf_mode: "CUMULATIVE_THROUGHPUT"
-      # priority: "MEDIUM"
-      scheduling_core_type: "PCORE_ONLY"
-      model_distribution_policy: "TENSOR_PARALLEL"
+      device_name: "GPU"
+      perf_mode: "THROUGHPUT"
+      priority: "HIGH"
+      # scheduling_core_type: "PCORE_ONLY"
       execution_mode: "PERFORMANCE"
     tensorrt:
       model_path: ${ROOT_DIR}/model/opt-1208-001.onnx

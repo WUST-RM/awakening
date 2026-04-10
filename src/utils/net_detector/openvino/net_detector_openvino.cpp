@@ -17,7 +17,7 @@ struct NetDetectorOpenVINO::Impl {
         std::string device_name;
 
         std::optional<ov::hint::PerformanceMode> perf_mode;
-        // ov::hint::Priority priority = ov::hint::Priority::MEDIUM;
+        std::optional<ov::hint::Priority> priority;
         std::optional<ov::hint::SchedulingCoreType> scheduling_core_type;
         std::optional<ov::hint::ExecutionMode> execution_mode;
         static ov::hint::PerformanceMode perfModeFromString(const std::string& s) {
@@ -84,9 +84,9 @@ struct NetDetectorOpenVINO::Impl {
                 perf_mode = perfModeFromString(config["perf_mode"].as<std::string>());
             }
 
-            // if (config["priority"]) {
-            //     priority = priorityFromString(config["priority"].as<std::string>());
-            // }
+            if (config["priority"]) {
+                priority = priorityFromString(config["priority"].as<std::string>());
+            }
 
             if (config["scheduling_core_type"]) {
                 scheduling_core_type =
@@ -108,7 +108,9 @@ struct NetDetectorOpenVINO::Impl {
             if (execution_mode.has_value()) {
                 m.emplace(ov::hint::execution_mode(execution_mode.value()));
             }
-
+            if (priority.has_value()) {
+                m.emplace(ov::hint::model_priority(priority.value()));
+            }
             if (scheduling_core_type.has_value()) {
                 if (device_name.find("CPU") != std::string::npos) {
                     m.emplace(ov::hint::scheduling_core_type(scheduling_core_type.value()));
