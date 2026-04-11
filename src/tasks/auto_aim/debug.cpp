@@ -15,14 +15,14 @@ void draw_auto_aim(cv::Mat& img, const AutoAimDebugCtx& ctx) {
     if (img.empty()) {
         return;
     }
-    auto armors = ctx.armors();
-    auto armor_target = ctx.armor_target();
+    auto armors = ctx.armors.get();
+    auto armor_target = ctx.armor_target.get();
     auto camera_info = ctx.camera_info();
-    auto cmd = ctx.gimbal_cmd();
-    auto fsm = ctx.fsm_state();
-    auto bullet_poss = ctx.bullet_positions();
+    auto cmd = ctx.gimbal_cmd.get();
+    auto fsm = ctx.fsm_state.get();
+    auto bullet_poss = ctx.bullet_positions.get();
     const cv::Rect img_rect(0, 0, img.cols, img.rows);
-    const cv::Rect roi = ctx.expanded() & img_rect;
+    const cv::Rect roi = ctx.expanded.get() & img_rect;
     if (roi.width > 0 && roi.height > 0) {
         cv::rectangle(img, roi, cv::Scalar(255, 255, 255), 2);
     }
@@ -186,7 +186,8 @@ void draw_auto_aim(cv::Mat& img, const AutoAimDebugCtx& ctx) {
         );
         std::string time_str = time_buf;
 
-        const std::string latency_str = fmt::format("Avg Latency: {:.2f}ms", ctx.avg_latency_ms());
+        const std::string latency_str =
+            fmt::format("Avg Latency: {:.2f}ms", ctx.avg_latency_ms.get());
 
         int font = cv::FONT_HERSHEY_SIMPLEX;
         double scale = 0.8;
@@ -326,11 +327,11 @@ void write_debug_data(const AutoAimDebugCtx& ctx) {
     const double t = std::chrono::duration<double>(now - start_time).count();
     static GimbalCmd last_cmd;
     static double last_yaw = 0.0;
-    auto gimbal_yaw_pitch = ctx.gimbal_yaw_pitch();
-    auto cmd = ctx.gimbal_cmd();
+    auto gimbal_yaw_pitch = ctx.gimbal_yaw_pitch.get();
+    auto cmd = ctx.gimbal_cmd.get();
     cmd = cmd.appear ? cmd : last_cmd;
     last_cmd = cmd;
-    auto armor_target = ctx.armor_target();
+    auto armor_target = ctx.armor_target.get();
     auto target_state = armor_target.get_target_state();
     d.time_log.handle_once(t);
     auto un_warp = [&](double _yaw) {

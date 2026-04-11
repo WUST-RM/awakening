@@ -241,5 +241,24 @@ private:
     int current_id_;
     mutable std::mutex mutex_;
 };
+template<typename T>
+class Locked {
+public:
+    Locked() = default;
+    Locked(const T& v): value_(v) {}
 
+    void set(const T& v) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        value_ = v;
+    }
+
+    T get() const {
+        std::lock_guard<std::mutex> lock(mtx_);
+        return value_;
+    }
+
+private:
+    mutable std::mutex mtx_;
+    T value_ {};
+};
 } // namespace awakening::utils

@@ -2,18 +2,18 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <rclcpp/qos.hpp>
 #include <string>
 #ifdef USE_ROS2
     #include "_rcl/node.hpp"
     #include "_rcl/tf.hpp"
     #include "_rcl/visual/armor.hpp"
     #include "_rcl/visual/armor_target.hpp"
+    #include "sensor_msgs/msg/camera_info.hpp"
+    #include "sensor_msgs/msg/image.hpp"
+    #include <rclcpp/qos.hpp>
 #endif
 #include "backward-cpp/backward.hpp"
 #include "param_deliver.h"
-#include "sensor_msgs/msg/camera_info.hpp"
-#include "sensor_msgs/msg/image.hpp"
 #include "tasks/auto_aim/armor_control/very_aimer.hpp"
 #include "tasks/auto_aim/armor_detect/armor_detector.hpp"
 #include "tasks/auto_aim/armor_tracker/armor_target.hpp"
@@ -452,8 +452,8 @@ int main(int argc, char** argv) {
         armors_queue.enqueue(armors);
         auto batch_armors = armors_queue.dequeue_batch();
         if (auto_aim_dbg) {
-            auto_aim_dbg->set_expanded(frame.expanded);
-            auto_aim_dbg->set_img_frame(std::move(frame.img_frame.clone()));
+            auto_aim_dbg->expanded.set(frame.expanded);
+            auto_aim_dbg->img_frame.set(std::move(frame.img_frame.clone()));
         }
 
         return std::make_tuple(std::optional<DetIo::second_type>(std::move(batch_armors)));
@@ -490,7 +490,7 @@ int main(int argc, char** argv) {
             log_ctx.found_count += armor_tracker.get_count();
             armor_tracker.reset_count();
             if (auto_aim_dbg) {
-                auto_aim_dbg->set_armors(armors);
+                auto_aim_dbg->armors.set(armors);
 #ifdef USE_ROS2
                 rcl::pub_armor_marker(rcl_node, SimpleFrame_to_str(armors.frame_id), armors);
                 rcl::pub_armor_target_marker(
@@ -550,7 +550,7 @@ int main(int argc, char** argv) {
         );
         cmd.aim_point.transform(old_in_camera_cv, std::to_underlying(SimpleFrame::CAMERA_CV));
         if (auto_aim_dbg) {
-            auto_aim_dbg->set_gimbal_cmd(cmd);
+            auto_aim_dbg->gimbal_cmd.set(cmd);
         }
     });
     s.add_rate_source<>("logger", 1.0, [&]() {
@@ -566,7 +566,7 @@ int main(int argc, char** argv) {
             avg_latency_ms
         );
         if (auto_aim_dbg) {
-            auto_aim_dbg->set_avg_latency_ms(avg_latency_ms);
+            auto_aim_dbg->avg_latency_ms.set(avg_latency_ms);
         }
         log_ctx.reset();
     });
@@ -574,7 +574,7 @@ int main(int argc, char** argv) {
         s.add_rate_source<>("debug", 60.0, [&]() {
             auto target = armor_target.read();
             target.write_log();
-            auto now = auto_aim_dbg->img_frame().timestamp;
+            auto now = auto_aim_dbg->img_frame.get().timestamp;
             auto old_in_camera_cv = tf->pose_a_in_b(
                 SimpleFrame(target.get_target_state().frame_id),
                 SimpleFrame::CAMERA_CV,
@@ -584,19 +584,20 @@ int main(int argc, char** argv) {
                 state.transform(old_in_camera_cv, std::to_underlying(SimpleFrame::CAMERA_CV));
             });
 
-            auto_aim_dbg->set_armor_target(target);
-            auto_aim_dbg->set_fsm_state(auto_aim_fsm_controller.get_state());
+            auto_aim_dbg->armor_target.set(target);
+            auto_aim_dbg->fsm_state.set(auto_aim_fsm_controller.get_state());
             auto gimbal_in_gimbal_odom =
                 tf->pose_a_in_b(SimpleFrame::GIMBAL, SimpleFrame::GIMBAL_ODOM, Clock::now());
             auto euler =
                 utils::matrix2euler(gimbal_in_gimbal_odom.linear(), utils::EulerOrder::ZYX);
             auto gimbal_yaw_pitch =
                 std::make_pair(angles::to_degrees(euler[0]), -angles::to_degrees(euler[1]));
-            auto_aim_dbg->set_gimbal_yaw_pitch(gimbal_yaw_pitch);
+            auto_aim_dbg->gimbal_yaw_pitch.set(gimbal_yaw_pitch);
             write_debug_data(auto_aim_dbg.value());
             bullet_pick_up.update(
                 Clock::now(),
-                auto_aim_dbg->gimbal_cmd().appear ? auto_aim_dbg->gimbal_cmd().fly_time : 0.4
+                auto_aim_dbg->gimbal_cmd.get().appear ? auto_aim_dbg->gimbal_cmd.get().fly_time
+                                                      : 0.4
             );
             auto bullet_poss =
                 bullet_pick_up.get_bullet_positions(now, very_aimer.get_yaw_pitch_offset());
@@ -605,8 +606,8 @@ int main(int argc, char** argv) {
             for (auto& pos: bullet_poss) {
                 pos = odom_in_camera_cv * pos;
             }
-            auto_aim_dbg->set_bullet_positions(bullet_poss);
-            auto img = auto_aim_dbg->img_frame();
+            auto_aim_dbg->bullet_positions.set(bullet_poss);
+            auto img = auto_aim_dbg->img_frame.get();
             auto debug_img = img.src_img;
             if (img.format == PixelFormat::RGB) {
                 cv::cvtColor(debug_img, debug_img, cv::COLOR_RGB2BGR);

@@ -14,7 +14,6 @@ public:
         const ISO3& camera_cv_in_odom,
         int frame_id
     );
-    void pose_solve(Armors& armors, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom);
     int get_count();
     void reset_count();
     AWAKENING_IMPL_DEFINITION(ArmorTracker)
