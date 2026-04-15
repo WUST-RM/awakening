@@ -600,30 +600,45 @@ struct VeryAimer::Impl {
     [[nodiscard]] GimbalCmd
     very_aim(ArmorTarget target, double bullet_speed, const AutoAimFsm& fsm) const noexcept {
         GimbalCmd cmd;
-        const int roughly_select = select_armor(target, fsm);
+        
         target.set_target_state([&](armor_point_motion_model::State& state) {
             state.predict(Clock::now());
         });
+        const int roughly_select = select_armor(target, fsm);
         const auto __armors_xyza = target.get_target_state().get_armors_xyza(target.target_number);
-        double prev_fly_time = ballistic_trajectory_->solve_flytime(
+        auto prev_fly_time = ballistic_trajectory_->solve_flytime(
             __armors_xyza[roughly_select].head<3>(),
             bullet_speed
         );
+        if (!prev_fly_time) {
+            cmd.appear = false;
+            return cmd;
+        }
         std::vector<ArmorTarget> iteration_target(10, target);
         for (int iter = 0; iter < iteration_target.size(); ++iter) {
             auto& i_target = iteration_target[iter];
             i_target.set_target_state([&](armor_point_motion_model::State& state) {
-                state.predict(prev_fly_time);
+                state.predict(prev_fly_time.value());
             });
             auto iter_select = select_armor(i_target, fsm);
             const auto iter_armors_xyza =
                 i_target.get_target_state().get_armors_xyza(i_target.target_number);
-            double iter_fly_time = ballistic_trajectory_->solve_flytime(
+            auto iter_fly_time = ballistic_trajectory_->solve_flytime(
                 iter_armors_xyza[iter_select].head<3>(),
                 bullet_speed
             );
+            if (!iter_fly_time) {
+                cmd.appear = false;
+                return cmd;
+            }
+            if (std::abs(iter_fly_time.value() - prev_fly_time.value()) < 1e-3) {
+                prev_fly_time.value() = iter_fly_time.value();
+                break;
+            }
+
+            prev_fly_time.value() = iter_fly_time.value();
         }
-        const double predict_time = prev_fly_time + params_.prediction_delay
+        const double predict_time = prev_fly_time.value() + params_.prediction_delay
             + (fsm == AutoAimFsm::AIM_WHOLE_CAR_CENTER ? params_.aim_center_more_prediction_time : 0
             );
         target.set_target_state([&](armor_point_motion_model::State& state) {
@@ -767,7 +782,7 @@ struct VeryAimer::Impl {
         cmd.a_pitch = angles::to_degrees(control.pitch_state.a);
         cmd.target_yaw = angles::to_degrees(target_yaw);
         cmd.target_pitch = angles::to_degrees(target_pitch);
-        cmd.fly_time = prev_fly_time;
+        cmd.fly_time = prev_fly_time.value();
         cmd.appear = true;
         cmd.aim_point = aim_traj.state_at(0.0);
         cmd.aim_point.frame_id = target.get_target_state().frame_id;

@@ -27,9 +27,10 @@ tf:
 
 bullet_pick_up:
   ballistic_trajectory:
+    type: resistance
     gravity: 9.8
-    resistance:  0.092
-    max_iter: 10
+    resistance: 0.092
+    iter: 10
   
 auto_exposure:
   enable: true
@@ -130,10 +131,10 @@ very_aimer:
   min_enable_pitch_deg: 0.25
   min_enable_yaw_deg: 0.25
   ballistic_trajectory:
+    type: resistance
     gravity: 9.8
     resistance: 0.092
-    max_iter: 10
-  
+    iter: 10
 
 
 

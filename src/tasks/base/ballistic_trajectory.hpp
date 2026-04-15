@@ -11,62 +11,75 @@ namespace awakening {
 class BallisticTrajectory {
 public:
     using Ptr = std::shared_ptr<BallisticTrajectory>;
+
+    enum class Type : int { RESISTANCE };
+
     struct Params {
         double gravity = 9.8;
         double resistance = 0.092;
-        int max_iter = 10;
-        void load(const YAML::Node& config) {
-            gravity = config["gravity"].as<double>();
-            resistance = config["resistance"].as<double>();
-            max_iter = config["max_iter"].as<int>();
-        }
-    } params_;
+        int iter = 20;
 
-    BallisticTrajectory(const YAML::Node& config) {
+        void load(const YAML::Node& config) {
+            if (config["gravity"])
+                gravity = config["gravity"].as<double>();
+            if (config["resistance"])
+                resistance = config["resistance"].as<double>();
+            if (config["iter"])
+                iter = config["iter"].as<int>();
+
+            if (gravity <= 0.0) {
+                throw std::invalid_argument("gravity must be positive");
+            }
+        }
+    };
+
+public:
+    explicit BallisticTrajectory(const YAML::Node& config) {
         params_.load(config);
+        type_ = str2Type(config["type"].as<std::string>());
     }
+
     static Ptr create(const YAML::Node& config) {
         return std::make_shared<BallisticTrajectory>(config);
     }
+
     std::optional<double> solve_pitch(const Vec3& target_pos, double v0) const {
         const double target_height = target_pos.z();
-        const double distance =
-            std::sqrt(target_pos.x() * target_pos.x() + target_pos.y() * target_pos.y());
+        const double distance = std::hypot(target_pos.x(), target_pos.y());
 
-        if (distance < 1e-6 || v0 < 1e-3) {
+        if (distance < kEps || v0 < kEps) {
             return std::nullopt;
         }
 
-        // 二分法边界 [-45°, 60°]
+        auto f = [&](double pitch) {
+            double t = flight_time(distance, v0, pitch);
+            if (!std::isfinite(t))
+                return std::numeric_limits<double>::infinity();
+
+            auto [x, y] = forward_model(pitch, v0, t);
+            return y - target_height;
+        };
+
         double left = -M_PI / 4.0;
         double right = M_PI / 3.0;
-
-        auto f = [&](double angle) -> double {
-            double t;
-            if (params_.resistance < 1e-6) {
-                t = distance / (v0 * std::cos(angle));
-            } else {
-                double r = std::max(params_.resistance, 1e-6);
-                t = (std::exp(r * distance) - 1) / (r * v0 * std::cos(angle));
-            }
-
-            return v0 * std::sin(angle) * t - 0.5 * params_.gravity * t * t - target_height;
-        };
 
         double f_left = f(left);
         double f_right = f(right);
 
-        if (f_left * f_right > 0) {
-            return std::nullopt; // 没有解
+        if (!std::isfinite(f_left) || !std::isfinite(f_right) || f_left * f_right > 0) {
+            return std::nullopt;
         }
 
         double mid = 0;
-        for (int i = 0; i < params_.max_iter; ++i) {
+        for (int i = 0; i < params_.iter; ++i) {
             mid = 0.5 * (left + right);
             double f_mid = f(mid);
 
-            if (std::abs(f_mid) < 1e-3 || (right - left) < 1e-6) {
-                return std::make_optional(mid);
+            if (!std::isfinite(f_mid))
+                return std::nullopt;
+
+            if (std::abs(f_mid) < 1e-4) {
+                return mid;
             }
 
             if (f_left * f_mid < 0) {
@@ -78,31 +91,79 @@ public:
             }
         }
 
-        return std::make_optional(mid);
+        return mid;
     }
-    double solve_flytime(const Vec3& target_pos, const double v0) {
-        double r = params_.resistance < 1e-4 ? 1e-4 : params_.resistance;
-        double distance =
-            std::sqrt(target_pos.x() * target_pos.x() + target_pos.y() * target_pos.y());
-        double angle = std::atan2(target_pos.z(), distance);
-        double t = (std::exp(r * distance) - 1) / (r * v0 * std::cos(angle));
+
+    std::optional<double> solve_flytime(const Vec3& target_pos, double v0) const {
+        auto pitch_opt = solve_pitch(target_pos, v0);
+        if (!pitch_opt)
+            return std::nullopt;
+
+        const double distance = std::hypot(target_pos.x(), target_pos.y());
+        double t = flight_time(distance, v0, *pitch_opt);
+
+        if (!std::isfinite(t) || t < 0) {
+            return std::nullopt;
+        }
 
         return t;
     }
+
     std::pair<double, double> solve_distance_height(double pitch, double v0, double t) const {
-        double r = params_.resistance < 1e-4 ? 1e-4 : params_.resistance;
-        double g = params_.gravity;
+        return forward_model(pitch, v0, t);
+    }
 
-        double cos_theta = std::cos(pitch);
-        double sin_theta = std::sin(pitch);
+private:
+    static constexpr double kEps = 1e-6;
 
-        if (v0 < 1e-6 || std::abs(cos_theta) < 1e-6) {
-            return { 0.0, 0.0 };
+    Params params_;
+    Type type_;
+
+    static Type str2Type(std::string str) {
+        std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+
+        if (str == "RESISTANCE")
+            return Type::RESISTANCE;
+
+        throw std::invalid_argument("Invalid type");
+    }
+
+    double flight_time(double distance, double v0, double pitch) const {
+        const double cos_theta = std::cos(pitch);
+        if (std::abs(cos_theta) < kEps) {
+            return std::numeric_limits<double>::infinity();
         }
-        double distance = std::log(1 + r * v0 * cos_theta * t) / r;
-        double height = v0 * sin_theta * t - 0.5 * g * t * t;
 
-        return { distance, height };
+        switch (type_) {
+            case Type::RESISTANCE: {
+                double k = std::max(params_.resistance, kEps);
+                double arg = k * distance;
+
+                if (arg > 700.0)
+                    return std::numeric_limits<double>::infinity();
+
+                return std::expm1(arg) / (k * v0 * cos_theta);
+            }
+        }
+
+        return std::numeric_limits<double>::infinity();
+    }
+
+    std::pair<double, double> forward_model(double pitch, double v0, double t) const {
+        const double g = params_.gravity;
+
+        switch (type_) {
+            case Type::RESISTANCE: {
+                double k = std::max(params_.resistance, kEps);
+
+                double x = std::log1p(k * v0 * std::cos(pitch) * t) / k;
+                double y = v0 * std::sin(pitch) * t - 0.5 * g * t * t;
+
+                return { x, y };
+            }
+        }
+
+        return { 0.0, 0.0 };
     }
 };
 struct Bullet {
