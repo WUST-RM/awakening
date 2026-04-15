@@ -10,7 +10,7 @@ serial:
   read_buf_size: 4096
 
 
-use_sim: false
+use_sim: true
 recorder:
   enable: false
 player:

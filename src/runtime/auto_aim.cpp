@@ -1,4 +1,5 @@
 #include "tasks/base/ballistic_trajectory.hpp"
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -121,6 +122,18 @@ inline std::string generate_record_filename(const std::string& folder_path) {
     oss << folder_path << "/" << std::put_time(&tm, "%Y-%m-%d_%H-%M-%S") << ".bin";
     return oss.str();
 }
+bool is_web_running() {
+    static std::atomic<bool> cached { true };
+    utils::dt_once(
+        [&]() {
+            const int ret = std::system("pgrep -x wust_vision_web > /dev/null 2>&1");
+            cached = (ret == 0);
+        },
+        std::chrono::duration<double>(1.0)
+    );
+    return cached.load();
+}
+
 int main(int argc, char** argv) {
     auto& signal = utils::SignalGuard::instance();
     logger::init(spdlog::level::trace);
@@ -451,7 +464,7 @@ int main(int argc, char** argv) {
         }
         armors_queue.enqueue(armors);
         auto batch_armors = armors_queue.dequeue_batch();
-        if (auto_aim_dbg) {
+        if (auto_aim_dbg && is_web_running()) {
             auto_aim_dbg->expanded.set(frame.expanded);
             auto_aim_dbg->img_frame.set(std::move(frame.img_frame.clone()));
         }
@@ -549,7 +562,7 @@ int main(int argc, char** argv) {
             cmd.timestamp
         );
         cmd.aim_point.transform(old_in_camera_cv, std::to_underlying(SimpleFrame::CAMERA_CV));
-        if (auto_aim_dbg) {
+        if (auto_aim_dbg && is_web_running()) {
             auto_aim_dbg->gimbal_cmd.set(cmd);
         }
     });
@@ -571,7 +584,10 @@ int main(int argc, char** argv) {
         log_ctx.reset();
     });
     if (auto_aim_dbg) {
-        s.add_rate_source<>("debug", 60.0, [&]() {
+        s.add_rate_source<>("debug", 45.0, [&]() {
+            if (!is_web_running()) {
+                return;
+            }
             auto target = armor_target.read();
             target.write_log();
             auto now = auto_aim_dbg->img_frame.get().timestamp;

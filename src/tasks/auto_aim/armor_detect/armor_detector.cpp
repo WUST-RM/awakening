@@ -199,11 +199,6 @@ struct ArmorDetector::Impl {
         armor.color_classifier = Armor::ColorClassifierCtx();
         armor.color_classifier->lights_box = lights_box;
         auto extractRotatedROI = [](const cv::Mat& src, const cv::RotatedRect& rect) {
-            // cv::Mat M, rotated, cropped;
-            // M = cv::getRotationMatrix2D(rect.center, rect.angle, 1.0);
-            // cv::warpAffine(src, rotated, M, src.size(), cv::INTER_LINEAR);
-            // cv::getRectSubPix(rotated, rect.size, rect.center, cropped);
-            // return cropped;
             cv::Rect bbox = rect.boundingRect();
             bbox &= cv::Rect(0, 0, src.cols, src.rows);
             if (bbox.width <= 0 || bbox.height <= 0)

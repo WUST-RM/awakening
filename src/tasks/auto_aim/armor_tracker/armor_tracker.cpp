@@ -45,7 +45,7 @@ struct ArmorTracker::Impl {
 
             if (pre.track_state.tracker_state == ArmorTarget::TrackState::TRACKING) {
                 std::swap(cur, pre);
-                pre = ArmorTarget {};
+                pre.track_state.tracker_state = ArmorTarget::TrackState::LOST;
             }
         } else if (cur.track_state.tracker_state == ArmorTarget::TrackState::TRACKING) {
             pre.track_state.tracker_state = ArmorTarget::TrackState::LOST;
@@ -79,14 +79,7 @@ struct ArmorTracker::Impl {
             return false;
         }
         AWAKENING_INFO("init target: {}", string_by_armor_class(init_target.number));
-        target = ArmorTarget(
-            init_target,
-            cfg_,
-            armors.timestamp,
-            frame_id,
-            camera_info,
-            camera_cv_in_odom
-        );
+        target.reset(init_target, cfg_, armors.timestamp, frame_id, camera_info, camera_cv_in_odom);
         target.track_state.tracker_state = ArmorTarget::TrackState::DETECTING;
         update_target(target, others, camera_info, camera_cv_in_odom);
         return true;

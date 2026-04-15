@@ -65,11 +65,17 @@ public:
         bool is_tracking() const noexcept {
             return tracker_state == TRACKING || tracker_state == TEMP_LOST;
         }
+        void reset()
+        {
+            tracker_state = LOST;
+            detect_count = 0;
+            lost_count = 0;
+        }
     };
     enum MeasureType { ARMOR, R_LIGHT, L_LIGHT };
 
     ArmorTarget() = default;
-    ArmorTarget(
+    void reset(
         const Armor& a,
         const ArmorTrackerCfg& c,
         const TimePoint& timestamp,

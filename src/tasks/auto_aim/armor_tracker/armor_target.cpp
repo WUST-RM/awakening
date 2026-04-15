@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 namespace awakening::auto_aim {
-ArmorTarget::ArmorTarget(
+void ArmorTarget::reset(
     const Armor& _a,
     const ArmorTrackerCfg& c,
     const TimePoint& timestamp,
@@ -115,6 +115,8 @@ ArmorTarget::ArmorTarget(
     target_number = a.number;
     last_update = timestamp;
     is_inited = true;
+    jumped = false;
+    track_state.reset();
 }
 Eigen::Matrix<double, Z_N, Z_N>
 ArmorTarget::measurement_covariance(const Eigen::Matrix<double, Z_N, 1>& z) const noexcept {
