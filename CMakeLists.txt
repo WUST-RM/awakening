@@ -52,7 +52,7 @@ if(BUILD_WITH_TRT)
     set(CMAKE_CUDA_COMPILER_LAUNCHER ccache)
 
     list(APPEND BUILD_DEFINITIONS USE_TRT)
-    list(APPEND BUILD_LIBS TensorRT::TensorRT TensorRT::nvonnxparser CUDA::cudart)
+    list(APPEND BUILD_LIBS TensorRT::TensorRT TensorRT::nvonnxparser CUDA::cudart  /usr/local/cuda/lib64/libnppicc.so)
 endif()
 
 configure_file(

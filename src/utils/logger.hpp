@@ -25,7 +25,6 @@ static constexpr auto LOG_NAME = "awakening";
 static constexpr size_t MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 static constexpr size_t FOLDER_WARN_SIZE = 500 * 1024 * 1024; // 500MB
 
-// 日志宏（保持不变）
 #define AWAKENING_TRACE(...) ::awakening::logger::get_logger()->trace(__VA_ARGS__)
 #define AWAKENING_DEBUG(...) ::awakening::logger::get_logger()->debug(__VA_ARGS__)
 #define AWAKENING_INFO(...) ::awakening::logger::get_logger()->info(__VA_ARGS__)

@@ -223,7 +223,7 @@ struct NetDetectorTensorrt::Impl {
                     return output;
                 }
                 ctx.device_buffers[input_idx_] = tensor;
-                output.resized_img = ctx.letter_box->tensorToMat(
+                output.resized_img = ctx.letter_box->tensor_to_mat(
                     static_cast<float*>(ctx.device_buffers[input_idx_]),
                     ctx.stream,
                     format != config_.target_format

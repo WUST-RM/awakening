@@ -157,6 +157,7 @@ camera:
     trigger_source: ""
     trigger_activation: ""
     format: "bgr" 
+    use_cuda_cvt: true
   camera_info:
     #8mm
     # image_width: 1440

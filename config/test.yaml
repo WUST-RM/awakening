@@ -10,7 +10,7 @@ serial:
   read_buf_size: 4096
 
 
-use_sim: true
+use_sim: false
 recorder:
   enable: false
 player:
@@ -157,6 +157,7 @@ camera:
     trigger_source: ""
     trigger_activation: ""
     format: "bgr" 
+    use_cuda_cvt: true
   camera_info:
     #8mm
     # image_width: 1440

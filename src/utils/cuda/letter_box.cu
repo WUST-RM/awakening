@@ -1,21 +1,6 @@
 #include "letter_box.hpp"
 #include "utils/common/image.hpp"
 
-#define CUDA_CHECK(call) \
-    do { \
-        cudaError_t err = call; \
-        if (err != cudaSuccess) { \
-            fprintf( \
-                stderr, \
-                "CUDA error at %s:%d: %s\n", \
-                __FILE__, \
-                __LINE__, \
-                cudaGetErrorString(err) \
-            ); \
-            exit(EXIT_FAILURE); \
-        } \
-    } while (0)
-
 namespace awakening::utils::__cuda {
 
 constexpr int PRE_MAX_SRC_W = 1920;
@@ -29,14 +14,14 @@ LetterBox::LetterBox(NetDetectorBase::Config config) {
     d_input_bgr_pitched_ = nullptr;
     d_nchw_ = nullptr;
     input_pitch_bytes_ = 0;
-    rellocMem();
+    relloc_mem();
 }
 
 LetterBox::~LetterBox() noexcept {
     release();
 }
 
-void LetterBox::rellocMem() {
+void LetterBox::relloc_mem() {
     release();
 
     CUDA_CHECK(cudaMalloc(&d_input_bgr_, max_src_w_ * max_src_h_ * 3 * sizeof(unsigned char)));
@@ -83,7 +68,7 @@ __global__ void nchw_float_to_hwc_uchar4(
     }
 }
 
-cv::Mat LetterBox::tensorToMat(float* d_nchw, cudaStream_t stream, bool swap_rb) const {
+cv::Mat LetterBox::tensor_to_mat(float* d_nchw, cudaStream_t stream, bool swap_rb) const {
     static uchar4* d_hwc = nullptr;
     static size_t cap = 0;
     const size_t need = config_.target_w * config_.target_h * sizeof(uchar4);
@@ -118,11 +103,11 @@ cv::Mat LetterBox::tensorToMat(float* d_nchw, cudaStream_t stream, bool swap_rb)
     cudaMemcpyAsync(img.data, d_hwc, need, cudaMemcpyDeviceToHost, stream);
     return img;
 }
-void LetterBox::getOutEnoughMem(int img_w, int img_h) {
+void LetterBox::check_out_enough_mem(int img_w, int img_h) {
     if (img_w > max_src_w_ || img_h > max_src_h_) {
         max_src_w_ = std::max(max_src_w_, img_w);
         max_src_h_ = std::max(max_src_h_, img_h);
-        rellocMem();
+        relloc_mem();
     }
 }
 
@@ -224,10 +209,10 @@ float* LetterBox::letterbox_pitched(
     Eigen::Matrix3f& tf_matrix,
     cudaStream_t stream
 ) {
-    if (!isInitialized())
+    if (!is_initialized())
         throw std::runtime_error("CudaInfer not initialized properly.");
 
-    getOutEnoughMem(img_w, img_h);
+    check_out_enough_mem(img_w, img_h);
 
     const float scale = fminf((float)config_.target_w / img_w, (float)config_.target_h / img_h);
     const float inv_scale = 1.f / scale;

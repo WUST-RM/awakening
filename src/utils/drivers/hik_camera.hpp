@@ -221,5 +221,6 @@ public:
     Scheduler& scheduler_;
     size_t source_snapshot_id_;
     std::thread daemon_thread_;
+    bool use_cuda_cvt_ = false;
 };
 } // namespace awakening

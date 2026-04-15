@@ -1,4 +1,5 @@
 #pragma once
+#include "common.hpp"
 #include <cuda_runtime.h>
 #include <utils/net_detector/net_detector_base.hpp>
 namespace awakening::utils::__cuda {
@@ -19,13 +20,13 @@ public:
         Eigen::Matrix3f& tf_matrix,
         cudaStream_t stream
     );
-    [[nodiscard]] cv::Mat tensorToMat(float* d_nchw, cudaStream_t stream, bool swap_rb) const;
+    [[nodiscard]] cv::Mat tensor_to_mat(float* d_nchw, cudaStream_t stream, bool swap_rb) const;
     void release();
-    bool isInitialized() const {
+    bool is_initialized() const {
         return d_input_bgr_ && d_nchw_ && d_input_bgr_pitched_;
     }
-    void getOutEnoughMem(int img_w, int img_h);
-    void rellocMem();
+    void check_out_enough_mem(int img_w, int img_h);
+    void relloc_mem();
     unsigned char* d_input_bgr_ = nullptr;
     float* d_nchw_ = nullptr;
     unsigned char* d_input_bgr_pitched_ = nullptr;
