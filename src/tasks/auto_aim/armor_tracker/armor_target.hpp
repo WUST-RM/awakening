@@ -7,6 +7,7 @@
 #include "utils/common/type_common.hpp"
 #include <chrono>
 #include <string>
+#include <utility>
 #include <vector>
 namespace awakening::auto_aim {
 using namespace armor_point_motion_model;
@@ -65,8 +66,7 @@ public:
         bool is_tracking() const noexcept {
             return tracker_state == TRACKING || tracker_state == TEMP_LOST;
         }
-        void reset()
-        {
+        void reset() {
             tracker_state = LOST;
             detect_count = 0;
             lost_count = 0;
@@ -75,6 +75,8 @@ public:
     enum MeasureType { ARMOR, R_LIGHT, L_LIGHT };
 
     ArmorTarget() = default;
+    void armor_pnp(Armor& a, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom)
+        const noexcept;
     void reset(
         const Armor& a,
         const ArmorTrackerCfg& c,
@@ -125,6 +127,8 @@ public:
     }
     bool is_inited = false;
     bool jumped = false;
+    int last_match_id = -1;
+    std::optional<std::pair<bool, std::vector<bool>>> outpost_has_all_and_has_set_ids;
     TrackState track_state;
     TimePoint last_update;
     ArmorClass target_number = ArmorClass::UNKNOWN;
