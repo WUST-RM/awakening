@@ -6,7 +6,9 @@
 #include "utils/utils.hpp"
 #include <algorithm>
 #include <ceres/ceres.h>
+#include <ceres/jet.h>
 #include <chrono>
+#include <cstdlib>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -74,14 +76,19 @@ struct Predict {
         auto& r = x[idx::R];
         auto& l = x[idx::L];
         auto& h = x[idx::H];
+        auto& vyaw = x[idx::VYAW];
 
-        r = std::clamp(r, T(0.1), T(0.5));
         if (r + l < T(0.1) || r + l > T(0.5)) {
             r = T(0.25);
             l = T(0);
         }
 
-        h = std::clamp(h, T(-0.5), T(0.5));
+        if (ceres::abs(h) > T(0.5)) {
+            h = T(0.0);
+        }
+        if (ceres::abs(vyaw) > T(20.0)) {
+            vyaw = T(0.0);
+        }
     }
     void f(const VecX& x0, VecX& x1) const {
         assert(x0.size() == X_N);

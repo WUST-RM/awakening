@@ -333,7 +333,8 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(
     std::vector<std::vector<double>> cost(n_obs, std::vector<double>(armors_num, max_cost + 1));
     if (!(outpost_has_all_and_has_set_ids.has_value()
               ? outpost_has_all_and_has_set_ids.value().first
-              : true))
+              : true)
+        || !jumped)
     {
         auto armors_xyza = target_state.get_armors_xyza(target_number);
         std::vector<double> obs_yaw(n_obs);

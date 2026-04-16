@@ -11,9 +11,11 @@
 #include "utils/logger.hpp"
 #include <cmath>
 #include <cstdlib>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <utility>
+#include <vector>
 namespace awakening::auto_aim {
 struct VeryAimer::Impl {
     struct ControlPoint {
@@ -353,7 +355,7 @@ struct VeryAimer::Impl {
                 traj.seg_prefix_time[i + 1] = traj.seg_prefix_time[i] + traj.segs[i].duration();
         }
 
-        void build_limit(double max_yaw_acc, double max_pitch_acc) noexcept {
+        void build_limit(double max_yaw_acc, double max_pitch_acc, double current_time) noexcept {
             auto& cp_vec = get_cp_vec();
             auto prefix = get_prefix();
             unwrap_states(cp_vec);
@@ -364,13 +366,13 @@ struct VeryAimer::Impl {
             const int N = static_cast<int>(cp_vec.size());
             if (N < 2)
                 return;
-            const double mid_time = (prefix.back() + prefix[0]) / 2.0;
+
             for (size_t i = offset; i + offset + 1 < cp_vec.size(); ++i) {
                 if (cp_vec[i].aim_id == cp_vec[i + 1].aim_id)
                     continue;
 
                 const double seg_mid = 0.5 * (prefix[i] + prefix[i + 1]);
-                const double dist = std::abs(seg_mid - mid_time);
+                const double dist = std::abs(seg_mid - current_time);
 
                 if (dist < best_dist) {
                     best_dist = dist;
@@ -675,6 +677,7 @@ struct VeryAimer::Impl {
             cmd.appear = false;
             return cmd;
         }
+
         auto hit_ctx = hit_ctx_opt.value();
         auto cp0 = select_and_get_control_point(hit_ctx.hit_time_target, bullet_speed, fsm);
         if (!cp0.valid) {
@@ -683,147 +686,125 @@ struct VeryAimer::Impl {
         }
 
         if (!is_same) {
+            auto sample_once = [&](double t,
+                                   const ArmorTarget& base_target,
+                                   AutoAimFsm fsm_mode,
+                                   const ControlPoint& _cp0,
+                                   GimbalState& out_gs,
+                                   AimPoint& out_ap) -> bool {
+                auto tmp_target = base_target;
+                tmp_target.set_target_state([&](armor_point_motion_model::State& state) {
+                    state.predict(t);
+                });
+
+                auto hit_opt = get_hit(tmp_target, bullet_speed, fsm_mode);
+                if (!hit_opt)
+                    return false;
+
+                auto cp = select_and_get_control_point(hit_opt->hit_time_target, bullet_speed, fsm);
+                if (!cp.valid)
+                    return false;
+
+                out_gs.aim_id = cp.aim_id;
+                out_gs.yaw_state.p = angles::normalize_angle(cp.yaw - _cp0.yaw);
+                out_gs.pitch_state.p = angles::normalize_angle(cp.pitch - _cp0.pitch);
+                out_ap = cp.aim_point;
+
+                return true;
+            };
+            auto build_traj = [&](auto& traj_gs,
+                                  auto& traj_ap,
+                                  const ControlPoint& _cp0,
+                                  AutoAimFsm fsm_mode,
+                                  int horizon,
+                                  double dt,
+                                  bool with_center = false) -> bool {
+                int half = horizon / 2;
+                const int delay_steps = params_.control_delay * 2.0 / dt;
+                for (int i = (fsm != AutoAimFsm::AIM_WHOLE_CAR_CENTER ? half : delay_steps); i >= 1;
+                     --i) {
+                    double t = -i * dt;
+
+                    GimbalState gs;
+                    AimPoint ap;
+
+                    if (!sample_once(t, target, fsm_mode, _cp0, gs, ap))
+                        return false;
+
+                    traj_gs.push_back(gs, t);
+                    traj_ap.push_back(ap, t);
+                }
+
+                {
+                    GimbalState gs0;
+                    gs0.aim_id = _cp0.aim_id;
+                    gs0.yaw_state.p = 0.0;
+                    gs0.pitch_state.p = 0.0;
+
+                    traj_gs.push_back(gs0, 0.0);
+                    traj_ap.push_back(_cp0.aim_point, 0.0);
+                }
+
+                for (int i = 1; i <= half; ++i) {
+                    double t = i * dt;
+
+                    GimbalState gs;
+                    AimPoint ap;
+
+                    if (!sample_once(t, target, fsm_mode, _cp0, gs, ap))
+                        return false;
+
+                    traj_gs.push_back(gs, t);
+                    traj_ap.push_back(ap, t);
+                }
+
+                return true;
+            };
             limit_traj_cp0_ = cp0;
             limit_traj_ = LimitTrajectory();
             aim_traj_ = Trajectory<AimPoint, double>();
+
             auto make_even = [](int x) { return x % 2 == 0 ? x : x + 1; };
 
             const int horizon = make_even(params_.sample_horizon);
-            const int half_horizon = horizon / 2.0;
             const double dt = params_.sample_total_time / horizon;
+
             limit_traj_.reserve(horizon + 1);
             aim_traj_.reserve(horizon + 1);
-            {
-                for (int i = half_horizon; i >= 1; --i) {
-                    double t = 0 - i * dt;
-                    auto tmp_target = target;
-                    tmp_target.set_target_state([&](armor_point_motion_model::State& state) {
-                        state.predict(t);
-                    });
-                    auto tmp_hit_ctx_opt = get_hit(tmp_target, bullet_speed, fsm);
-                    if (!tmp_hit_ctx_opt) {
-                        cmd.appear = false;
-                        return cmd;
-                    }
-                    auto tmp_hit_ctx = tmp_hit_ctx_opt.value();
-                    auto cp = select_and_get_control_point(
-                        tmp_hit_ctx.hit_time_target,
-                        bullet_speed,
-                        fsm
-                    );
-                    if (!cp.valid) {
-                        cmd.appear = false;
-                        return cmd;
-                    }
-                    GimbalState gs;
-                    gs.aim_id = cp.aim_id;
-                    gs.yaw_state.p = angles::normalize_angle(cp.yaw - limit_traj_cp0_.yaw);
-                    gs.pitch_state.p = angles::normalize_angle(cp.pitch - limit_traj_cp0_.pitch);
-                    limit_traj_.push_back(gs, t);
-                    aim_traj_.push_back(cp.aim_point, t);
-                }
 
-                GimbalState gs0;
-                gs0.aim_id = limit_traj_cp0_.aim_id;
-                gs0.yaw_state.p = 0.0;
-                gs0.pitch_state.p = 0.0;
-                limit_traj_.push_back(gs0, 0.0);
-                aim_traj_.push_back(limit_traj_cp0_.aim_point, 0.0);
-                for (int i = 1; i <= half_horizon; ++i) {
-                    double t = 0 + i * dt;
-                    auto tmp_target = target;
-                    tmp_target.set_target_state([&](armor_point_motion_model::State& state) {
-                        state.predict(t);
-                    });
-                    auto tmp_hit_ctx_opt = get_hit(tmp_target, bullet_speed, fsm);
-                    if (!tmp_hit_ctx_opt) {
-                        cmd.appear = false;
-                        return cmd;
-                    }
-                    auto tmp_hit_ctx = tmp_hit_ctx_opt.value();
-                    auto cp = select_and_get_control_point(
-                        tmp_hit_ctx.hit_time_target,
-                        bullet_speed,
-                        fsm
-                    );
-                    if (!cp.valid) {
-                        cmd.appear = false;
-                        return cmd;
-                    }
-                    GimbalState gs;
-                    gs.aim_id = cp.aim_id;
-                    gs.yaw_state.p = angles::normalize_angle(cp.yaw - limit_traj_cp0_.yaw);
-                    gs.pitch_state.p = angles::normalize_angle(cp.pitch - limit_traj_cp0_.pitch);
-                    limit_traj_.push_back(gs, t);
-                    aim_traj_.push_back(cp.aim_point, t);
-                }
-                limit_traj_.build_limit(params_.max_yaw_acc, params_.max_pitch_acc);
+            if (!build_traj(limit_traj_, aim_traj_, limit_traj_cp0_, fsm, horizon, dt)) {
+                cmd.appear = false;
+                return cmd;
             }
+
+            limit_traj_.build_limit(params_.max_yaw_acc, params_.max_pitch_acc, time_in_traj);
 
             if (fsm == AutoAimFsm::AIM_WHOLE_CAR_CENTER) {
                 aim_traj_.clear();
-                aim_traj_.reserve(horizon + 1);
                 aim_center_target_traj_ = Trajectory<GimbalState, double>();
+
                 aim_center_target_traj_.reserve(horizon + 1);
+                aim_traj_.reserve(horizon + 1);
+
                 aim_center_target_traj_cp0_ = select_and_get_control_point(
                     target,
                     bullet_speed,
                     AutoAimFsm::AIM_WHOLE_CAR_ARMOR
                 );
-                for (int i = half_horizon; i >= 1; --i) {
-                    double t = 0 - i * dt;
-                    auto tmp_target = target;
-                    tmp_target.set_target_state([&](armor_point_motion_model::State& state) {
-                        state.predict(t);
-                    });
-                    auto cp = select_and_get_control_point(
-                        tmp_target,
-                        bullet_speed,
-                        AutoAimFsm::AIM_WHOLE_CAR_ARMOR
-                    );
-                    if (!cp.valid) {
-                        cmd.appear = false;
-                        return cmd;
-                    }
-                    GimbalState gs;
-                    gs.aim_id = cp.aim_id;
-                    gs.yaw_state.p =
-                        angles::normalize_angle(cp.yaw - aim_center_target_traj_cp0_.yaw);
-                    gs.pitch_state.p =
-                        angles::normalize_angle(cp.pitch - aim_center_target_traj_cp0_.pitch);
-                    aim_center_target_traj_.push_back(gs, t);
-                    aim_traj_.push_back(cp.aim_point, t);
-                }
 
-                GimbalState gs0;
-                gs0.aim_id = aim_center_target_traj_cp0_.aim_id;
-                gs0.yaw_state.p = 0.0;
-                gs0.pitch_state.p = 0.0;
-                aim_center_target_traj_.push_back(gs0, 0.0);
-                aim_traj_.push_back(aim_center_target_traj_cp0_.aim_point, 0.0);
-                for (int i = 1; i <= half_horizon; ++i) {
-                    double t = 0 + i * dt;
-                    auto tmp_target = target;
-                    tmp_target.set_target_state([&](armor_point_motion_model::State& state) {
-                        state.predict(t);
-                    });
-                    auto cp = select_and_get_control_point(
-                        tmp_target,
-                        bullet_speed,
-                        AutoAimFsm::AIM_WHOLE_CAR_ARMOR
-                    );
-                    if (!cp.valid) {
-                        cmd.appear = false;
-                        return cmd;
-                    }
-                    GimbalState gs;
-                    gs.aim_id = cp.aim_id;
-                    gs.yaw_state.p =
-                        angles::normalize_angle(cp.yaw - aim_center_target_traj_cp0_.yaw);
-                    gs.pitch_state.p =
-                        angles::normalize_angle(cp.pitch - aim_center_target_traj_cp0_.pitch);
-                    aim_center_target_traj_.push_back(gs, t);
-                    aim_traj_.push_back(cp.aim_point, t);
+                const int delay_steps = params_.control_delay * 2.0 / dt;
+
+                if (!build_traj(
+                        aim_center_target_traj_,
+                        aim_traj_,
+                        aim_center_target_traj_cp0_,
+                        AutoAimFsm::AIM_WHOLE_CAR_ARMOR,
+                        horizon,
+                        dt
+                    ))
+                {
+                    cmd.appear = false;
+                    return cmd;
                 }
             }
         }
@@ -834,8 +815,7 @@ struct VeryAimer::Impl {
             fsm != AutoAimFsm::AIM_WHOLE_CAR_CENTER ? limit_traj_ : aim_center_target_traj_;
         auto target_gimbal_state = target_traj.Trajectory::state_at(time_in_traj);
         auto control = limit_traj_.LimitTrajectory::state_at(time_in_traj);
-        double control_yaw =
-            angles::normalize_angle(control.yaw_state.p + limit_traj_cp0_.yaw);
+        double control_yaw = angles::normalize_angle(control.yaw_state.p + limit_traj_cp0_.yaw);
         double control_pitch =
             angles::normalize_angle(control.pitch_state.p + limit_traj_cp0_.pitch);
         double target_yaw =
@@ -898,23 +878,28 @@ struct VeryAimer::Impl {
                ))
                 < cmd.enable_pitch_diff;
         if (fsm != AutoAimFsm::AIM_WHOLE_CAR_CENTER) {
-            auto delay_control =
-                limit_traj_.Trajectory::state_at(time_in_traj + params_.control_delay);
-            auto delay_target =
-                limit_traj_.LimitTrajectory::state_at(time_in_traj + params_.control_delay);
-            auto delay_enable = cal_enbale_diff(time_in_traj + params_.control_delay);
-            auto delay_fire =
-                std::abs(angles::shortest_angular_distance(
-                    angles::normalize_angle(delay_control.yaw_state.p + cp0.yaw),
-                    angles::normalize_angle(delay_target.yaw_state.p + cp0.yaw)
-                )) < delay_enable.first
-                && std::abs(angles::shortest_angular_distance(
-                       angles::normalize_angle(delay_control.pitch_state.p + cp0.pitch),
-                       angles::normalize_angle(delay_target.pitch_state.p + cp0.pitch)
-                   ))
+            auto delay_fire = [&](double delay) {
+                auto delay_control = limit_traj_.LimitTrajectory::state_at(time_in_traj + delay);
+                auto delay_target = target_traj.Trajectory::state_at(time_in_traj + delay);
+                auto delay_enable = cal_enbale_diff(time_in_traj + delay);
+                return std::abs(angles::shortest_angular_distance(
+                           angles::normalize_angle(delay_control.yaw_state.p + cp0.yaw),
+                           angles::normalize_angle(delay_target.yaw_state.p + cp0.yaw)
+                       ))
+                    < delay_enable.first
+                    && std::abs(angles::shortest_angular_distance(
+                           angles::normalize_angle(delay_control.pitch_state.p + cp0.pitch),
+                           angles::normalize_angle(delay_target.pitch_state.p + cp0.pitch)
+                       ))
                     < delay_enable.second;
-            if (!delay_fire) {
+            };
+
+            if (!delay_fire(+params_.control_delay)) {
                 cmd.no_shoot();
+            } else if (!cmd.fire_advice && delay_fire(-params_.control_delay)) {
+                cmd.fire_advice = true;
+                cmd.enable_yaw_diff = angles::from_degrees(params_.min_enable_yaw_deg);
+                cmd.enable_pitch_diff = angles::from_degrees(params_.min_enable_pitch_deg);
             }
         }
 
