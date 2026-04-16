@@ -51,7 +51,7 @@ struct ArmorTracker::Impl {
             pre.track_state.tracker_state = ArmorTarget::TrackState::LOST;
         }
 
-        return target_buf_[cur_target_idx_];
+        return target_buf_[cur_target_idx_].fast_copy_without_ekf();
     }
     bool init_target(
         ArmorTarget& target,

@@ -6,6 +6,7 @@
 #include "tasks/base/web.hpp"
 #include "utils/common/type_common.hpp"
 #include <chrono>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,6 +48,7 @@ struct ArmorTrackerCfg {
         r_uv = config["r_uv"].as<double>();
     }
 };
+static inline int GOBAL_ID = 0;
 class ArmorTarget {
 public:
     struct TrackState {
@@ -73,7 +75,6 @@ public:
         }
     };
     enum MeasureType { ARMOR, R_LIGHT, L_LIGHT };
-
     ArmorTarget() = default;
     void armor_pnp(Armor& a, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom)
         const noexcept;
@@ -100,29 +101,28 @@ public:
     [[nodiscard]] Eigen::Matrix<double, Z_N, Z_N>
     measurement_covariance(const Eigen::Matrix<double, Z_N, 1>& z) const noexcept;
     [[nodiscard]] Eigen::Matrix<double, X_N, X_N> process_noise(double dt) const noexcept;
-    [[nodiscard]] Eigen::Matrix<double, Z_N, 1> get_measurement(Armor& a) noexcept;
+    [[nodiscard]] Eigen::Matrix<double, Z_N, 1> get_measurement(Armor& a) const noexcept;
     [[nodiscard]] Eigen::Matrix<double, Z_N, 1>
-    get_measurement(Armor& a, const VecZ& z_pred, MeasureType mt) noexcept;
+    get_measurement(Armor& a, const VecZ& z_pred, MeasureType mt) const noexcept;
     void predict_ekf(const TimePoint& timestamp);
     bool update(
         const std::pair<int, Armor>& a,
         const TimePoint& timestamp,
         const CameraInfo& camera_info,
         const ISO3& camera_cv_in_odom
-    ) noexcept;
-    std::vector<std::pair<int, Armor>> match(
-        std::vector<Armor>& armors,
-        const CameraInfo& camera_info,
-        const ISO3& camera_cv_in_odom
-    ) noexcept;
+    );
+    std::vector<std::pair<int, Armor>>
+    match(std::vector<Armor>& armors, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom)
+        const noexcept;
     Measure::Ctx measure_ctx;
-    RobotStateESEKF esekf;
+    std::optional<RobotStateESEKF> esekf;
     ArmorTrackerCfg cfg;
     State get_target_state() const {
         return target_state;
     }
     template<typename F>
     void set_target_state(F&& f) {
+        this_id = GOBAL_ID++;
         f(target_state);
     }
     bool is_inited = false;
@@ -132,6 +132,21 @@ public:
     TrackState track_state;
     TimePoint last_update;
     ArmorClass target_number = ArmorClass::UNKNOWN;
+    int this_id = -1;
+    [[nodiscard]] inline ArmorTarget fast_copy_without_ekf() const noexcept {
+        ArmorTarget target;
+        target.target_number = this->target_number;
+        target.target_state = this->target_state;
+        target.last_update = this->last_update;
+        target.cfg = this->cfg;
+        target.track_state = this->track_state;
+        target.is_inited = this->is_inited;
+        target.jumped = this->jumped;
+        target.last_match_id = this->last_match_id;
+        target.outpost_has_all_and_has_set_ids = this->outpost_has_all_and_has_set_ids;
+        target.this_id = this->this_id;
+        return target;
+    }
     [[nodiscard]] inline bool check() const noexcept {
         auto v = track_state.is_tracking()
             && std::chrono::duration<double>(Clock::now() - last_update).count()

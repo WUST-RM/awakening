@@ -525,9 +525,11 @@ int main(int argc, char** argv) {
             SimpleFrame::GIMBAL_ODOM,
             target.get_target_state().timestamp
         );
+        int old_this_id = target.this_id;
         target.set_target_state([&](armor_point_motion_model::State& state) {
             state.transform(old_in_gimbal_odom, std::to_underlying(SimpleFrame::GIMBAL_ODOM));
         }); // todo : kill gimbal_odom_vel in odom
+        target.this_id = old_this_id;
         GimbalCmd cmd {
             .appear = false,
         };

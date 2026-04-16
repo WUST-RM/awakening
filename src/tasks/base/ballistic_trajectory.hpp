@@ -4,6 +4,7 @@
 #include "utils/utils.hpp"
 #include <deque>
 #include <optional>
+#include <utility>
 #include <vector>
 #include <yaml-cpp/node/node.h>
 namespace awakening {
@@ -94,7 +95,8 @@ public:
         return mid;
     }
 
-    std::optional<double> solve_flytime(const Vec3& target_pos, double v0) const {
+    std::optional<std::pair<double, double>>
+    solve_pitch_and_flytime(const Vec3& target_pos, double v0) const {
         auto pitch_opt = solve_pitch(target_pos, v0);
         if (!pitch_opt)
             return std::nullopt;
@@ -106,7 +108,7 @@ public:
             return std::nullopt;
         }
 
-        return t;
+        return std::make_pair(*pitch_opt, t);
     }
 
     std::pair<double, double> solve_distance_height(double pitch, double v0, double t) const {

@@ -12,7 +12,7 @@ public:
     VeryAimer(const YAML::Node& config);
     AWAKENING_IMPL_DEFINITION(VeryAimer)
     [[nodiscard]] GimbalCmd
-    very_aim(ArmorTarget target, double bullet_speed, const AutoAimFsm& fsm);
+    very_aim(const ArmorTarget& target, double bullet_speed, const AutoAimFsm& fsm);
     std::pair<double, double> get_yaw_pitch_offset();
 };
 } // namespace awakening::auto_aim

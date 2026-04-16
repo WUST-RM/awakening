@@ -12,6 +12,7 @@
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 #include <optional>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 namespace awakening::auto_aim {
@@ -57,15 +58,15 @@ void ArmorTarget::reset(
         u_r,
         p0
     );
-    esekf.setResidualFunc([this](
-                              const Eigen::Matrix<double, Z_N, 1>& z_pred,
-                              const Eigen::Matrix<double, Z_N, 1>& z
-                          ) {
+    esekf.value().setResidualFunc([this](
+                                      const Eigen::Matrix<double, Z_N, 1>& z_pred,
+                                      const Eigen::Matrix<double, Z_N, 1>& z
+                                  ) {
         Eigen::Matrix<double, Z_N, 1> r = z - z_pred;
         return r;
     });
-    esekf.setIterationNum(cfg.esekf_iter_num);
-    esekf.setInjectFunc(
+    esekf.value().setIterationNum(cfg.esekf_iter_num);
+    esekf.value().setInjectFunc(
         [this](const Eigen::Matrix<double, X_N, 1>& delta, Eigen::Matrix<double, X_N, 1>& nominal) {
             for (int i = 0; i < X_N; i++) {
                 if (i == idx::YAW)
@@ -90,7 +91,7 @@ void ArmorTarget::reset(
     target_state.x << xc, 0, yc, 0, zc, 0, yaw, 0, r, 0, 0;
     target_state.timestamp = timestamp;
     target_state.frame_id = frame_id;
-    esekf.setState(target_state.x);
+    esekf.value().setState(target_state.x);
     target_number = a.number;
     last_update = timestamp;
     is_inited = true;
@@ -104,6 +105,7 @@ void ArmorTarget::reset(
         outpost_has_all_and_has_set_ids = std::nullopt;
     }
     track_state.reset();
+    this_id = GOBAL_ID++;
 }
 void ArmorTarget::armor_pnp(Armor& a, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom)
     const noexcept {
@@ -188,7 +190,7 @@ Eigen::Matrix<double, X_N, X_N> ArmorTarget::process_noise(double dt) const noex
     return q;
 }
 
-[[nodiscard]] Eigen::Matrix<double, Z_N, 1> ArmorTarget::get_measurement(Armor& a) noexcept {
+[[nodiscard]] Eigen::Matrix<double, Z_N, 1> ArmorTarget::get_measurement(Armor& a) const noexcept {
     Eigen::Matrix<double, Z_N, 1> z;
     auto key_points = a.key_points.landmarks();
     z[idx::LEFT_TOP_X] = key_points[std::to_underlying(ArmorKeyPointsIndex::LEFT_TOP)].x;
@@ -202,7 +204,7 @@ Eigen::Matrix<double, X_N, X_N> ArmorTarget::process_noise(double dt) const noex
     return z;
 }
 [[nodiscard]] Eigen::Matrix<double, Z_N, 1>
-ArmorTarget::get_measurement(Armor& a, const VecZ& z_pred, MeasureType mt) noexcept {
+ArmorTarget::get_measurement(Armor& a, const VecZ& z_pred, MeasureType mt) const noexcept {
     Eigen::Matrix<double, Z_N, 1> z;
     switch (mt) {
         case ARMOR: {
@@ -244,21 +246,28 @@ ArmorTarget::get_measurement(Armor& a, const VecZ& z_pred, MeasureType mt) noexc
     return z;
 }
 void ArmorTarget::predict_ekf(const TimePoint& timestamp) {
+    if (!esekf) {
+        throw std::runtime_error("ESEKF is not initialized");
+    }
     auto dt = std::chrono::duration<double>(timestamp - target_state.timestamp).count();
-    esekf.setPredictFunc(Predict { .dt = dt,
-                                   .model = target_number != ArmorClass::OUTPOST
-                                       ? MotionModel::CONSTANT_VEL_ROT
-                                       : MotionModel::CONSTANT_ROTATION });
-    esekf.setUpdateQ([&]() { return process_noise(dt); });
-    target_state.x = esekf.predict();
+    esekf.value().setPredictFunc(Predict { .dt = dt,
+                                           .model = target_number != ArmorClass::OUTPOST
+                                               ? MotionModel::CONSTANT_VEL_ROT
+                                               : MotionModel::CONSTANT_ROTATION });
+    esekf.value().setUpdateQ([&]() { return process_noise(dt); });
+    target_state.x = esekf.value().predict();
     target_state.timestamp = timestamp;
+    this_id = GOBAL_ID++;
 }
 bool ArmorTarget::update(
     const std::pair<int, Armor>& a,
     const TimePoint& timestamp,
     const CameraInfo& camera_info,
     const ISO3& camera_cv_in_odom
-) noexcept {
+) {
+    if (!esekf) {
+        throw std::runtime_error("ESEKF is not initialized");
+    }
     auto armor = a.second;
     const auto id = a.first;
     if (id != 0) {
@@ -293,7 +302,7 @@ bool ArmorTarget::update(
             }
         }
     }
-    esekf.setUpdateR([&](const Eigen::Matrix<double, Z_N, 1>& z) {
+    esekf.value().setUpdateR([&](const Eigen::Matrix<double, Z_N, 1>& z) {
         return measurement_covariance(z);
     });
 
@@ -303,18 +312,19 @@ bool ArmorTarget::update(
     VecZ z_pred;
     measure.h(target_state.x, z_pred);
     auto measurement = get_measurement(armor);
-    esekf.setMeasureFunc(measure);
+    esekf.value().setMeasureFunc(measure);
 
-    target_state.x = esekf.update(measurement);
+    target_state.x = esekf.value().update(measurement);
     target_state.timestamp = timestamp;
     last_update = timestamp;
+    this_id = GOBAL_ID++;
     return true;
 }
 std::vector<std::pair<int, Armor>> ArmorTarget::match(
     std::vector<Armor>& armors,
     const CameraInfo& camera_info,
     const ISO3& camera_cv_in_odom
-) noexcept {
+) const noexcept {
     std::vector<std::pair<int, Armor>> result;
     const int n_obs = static_cast<int>(armors.size());
     const int armors_num = armor_num();
