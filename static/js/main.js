@@ -26,7 +26,6 @@ function toggleFullscreen() {
   }
 }
 
-// 监听用户按 ESC 或其他方式退出全屏
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement) {
     document.body.classList.remove('fullscreen-mode');

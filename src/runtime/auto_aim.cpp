@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #ifdef USE_ROS2
     #include "_rcl/node.hpp"
     #include "_rcl/tf.hpp"
@@ -521,16 +522,11 @@ int main(int argc, char** argv) {
     });
     s.add_rate_source<>("solver", 1000.0, [&]() {
         log_ctx.solve_count++;
-        auto target = armor_target.read();
-        auto old_in_gimbal_odom = tf->pose_a_in_b(
-            SimpleFrame(target.get_target_state().frame_id),
-            SimpleFrame::GIMBAL_ODOM,
-            target.get_target_state().timestamp
-        );
+        auto target = armor_target.read(); //需要转为相对gimbal_odom
         int old_this_id = target.this_id;
-        target.set_target_state([&](armor_point_motion_model::State& state) {
-            state.transform(old_in_gimbal_odom, std::to_underlying(SimpleFrame::GIMBAL_ODOM));
-        }); // todo : kill gimbal_odom_vel in odom
+        target.set_target_state([](auto& s) {
+            s.frame_id = std::to_underlying(SimpleFrame::GIMBAL_ODOM);
+        });
         target.this_id = old_this_id;
         GimbalCmd cmd {
             .appear = false,
@@ -594,16 +590,7 @@ int main(int argc, char** argv) {
             }
             auto target = armor_target.read();
             target.write_log();
-            auto now = auto_aim_dbg->img_frame.get().timestamp;
-            auto old_in_camera_cv = tf->pose_a_in_b(
-                SimpleFrame(target.get_target_state().frame_id),
-                SimpleFrame::CAMERA_CV,
-                now
-            );
-            target.set_target_state([&](armor_point_motion_model::State& state) {
-                state.transform(old_in_camera_cv, std::to_underlying(SimpleFrame::CAMERA_CV));
-            });
-
+            auto img_now = auto_aim_dbg->img_frame.get().timestamp;
             auto_aim_dbg->armor_target.set(target);
             auto_aim_dbg->fsm_state.set(auto_aim_fsm_controller.get_state());
             auto gimbal_in_gimbal_odom =
@@ -620,12 +607,13 @@ int main(int argc, char** argv) {
                                                       : 0.4
             );
             auto bullet_poss =
-                bullet_pick_up.get_bullet_positions(now, very_aimer.get_yaw_pitch_offset());
+                bullet_pick_up.get_bullet_positions(img_now, very_aimer.get_yaw_pitch_offset());
             auto odom_in_camera_cv =
-                tf->pose_a_in_b(SimpleFrame::ODOM, SimpleFrame::CAMERA_CV, now);
+                tf->pose_a_in_b(SimpleFrame::ODOM, SimpleFrame::CAMERA_CV, img_now);
             for (auto& pos: bullet_poss) {
                 pos = odom_in_camera_cv * pos;
             }
+            auto_aim_dbg->odom_in_camera_cv.set(odom_in_camera_cv);
             auto_aim_dbg->bullet_positions.set(bullet_poss);
             auto img = auto_aim_dbg->img_frame.get();
             auto debug_img = img.src_img;

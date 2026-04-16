@@ -9,8 +9,8 @@ serial:
   char_size: 8
   read_buf_size: 4096
 
-
 use_sim: false
+
 recorder:
   enable: false
 player:
@@ -27,14 +27,12 @@ tf:
 
 bullet_pick_up:
   ballistic_trajectory:
-    type: resistance
     gravity: 9.8
     resistance: 0.092
-    iter: 10
   
 auto_exposure:
   enable: true
-  target_brightness: 25.0
+  target_brightness: 35.0
   tolerance: 3.0
   step_gain: 15.0
   decay_step: 1.0
@@ -48,7 +46,7 @@ armor_detector:
     model_type: tup
     conf_threshold: 0.2
   net_detector:
-    backend: openvino
+    backend: tensorrt
     openvino:
       model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
       device_name: "GPU"
@@ -74,7 +72,7 @@ armor_tracker:
   tracking_thres: 10
   max_yaw_diff_deg: 60.0
   max_dis_diff: 3.0
-  match_gate: 1000.0
+  match_gate: 300.0
   qxyz_common: [20.0, 20.0, 1.0]
   qyaw_common: 10.0
   qxyz_output: [10.0, 10.0, 0.5]
@@ -83,20 +81,13 @@ armor_tracker:
   q_l: 0.0000001
   q_h: 0.0000001
   q_outpost_dz: 0.5
-  # yp_r: 2e-3
-  # dis_r_front: 0.5
-  # dis_r_side: 2.5
-  # dis2_r_ratio: 0.1
-  # yaw_r_base_front: 0.2
-  # yaw_r_base_side: 0.06
-  # yaw_r_log_ratio: 0.02
-  r_uv: 50.0
+  r_uv: 30.0
   esekf_iter_num: 5
 
 auto_aim_fsm:
   single_whole_up: 1.5 
   single_whole_down: 1.0
-  whole_pair_up: 6.5 
+  whole_pair_up: 16.5 
   whole_pair_down: 7.5 #1s内至少换2次板子  2pi  否则轨迹规划无意义
   pair_center_up: 16.5
   pair_center_down: 15.0
@@ -108,9 +99,9 @@ very_aimer:
   base_pitch_offset: -3.0
   # base_yaw_offset: -0.0
   # base_pitch_offset: -0.0
-  sample_total_time: 2.0
+  sample_total_time: 1.0
   
-  sample_horizon: 500
+  sample_horizon: 200
 
   control_delay: 0.2
   
@@ -131,17 +122,14 @@ very_aimer:
   min_enable_pitch_deg: 0.25
   min_enable_yaw_deg: 0.25
   ballistic_trajectory:
-    type: resistance
     gravity: 9.8
     resistance: 0.092
-    iter: 10
-  
 
 
 
 camera: 
   hik_camera:
-    target_sn: DA2166432
+    target_sn: DA3038891
     adc_bit_depth: Bits_8
     pixel_format: BayerRG8 #RGB8Packed
     reverse_x: false
@@ -159,7 +147,7 @@ camera:
     trigger_source: ""
     trigger_activation: ""
     format: "bgr" 
-    use_cuda_cvt: false
+    use_cuda_cvt: true
   camera_info:
     #8mm
     # image_width: 1440

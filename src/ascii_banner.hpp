@@ -61,4 +61,4 @@ inline void print_banner() {
     }
 }
 
-} // namespace wust_vision
+} // namespace awakening

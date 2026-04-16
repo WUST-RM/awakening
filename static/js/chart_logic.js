@@ -79,7 +79,7 @@ const commonChartOptions = {
   },
   scales: {
     x: {
-      display: false,   // ✅ 关键：彻底关闭 X 轴显示
+      display: false,   
     },
     y: {
       title: { display: true, text: "Value" },

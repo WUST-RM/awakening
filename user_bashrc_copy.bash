@@ -109,97 +109,14 @@ fi
 
 
 
+export MVCAM_SDK_PATH=/opt/MVS
 
+export MVCAM_COMMON_RUNENV=/opt/MVS/lib
 
+export MVCAM_GENICAM_CLPROTOCOL=/opt/MVS/lib/CLProtocol
 
-
-export PATH="/usr/local/opt/llvm/bin:$PATH"
-
-export LD_LIBRARY_PATH=/usr/lib
-#export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-
-
-
-
-
-
-
-
-
-
-
-#export MVCAM_SDK_PATH=/opt/MVS
-
-#export MVCAM_COMMON_RUNENV=/opt/MVS/lib
-
-#export MVCAM_GENICAM_CLPROTOCOL=/opt/MVS/lib/CLProtocol
-
-#export ALLUSERSPROFILE=/opt/MVS/MVFG
-#export LD_LIBRARY_PATH=/opt/MVS/lib/64:/opt/MVS/lib/32:$LD_LIBRARY_PATH
-
-
-
-
-
-
-
-export PATH=/usr/local/cuda-12.6/bin:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:$LD_LIBRARY_PATH
-
-
-export CUDA_HOME=/usr/local/cuda-12.6
-#export CUDNN_HOME=/usr/local/cuda-11.8
-export PATH=$CUDA_HOME/bin:$PATH
-export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-
-#export ROS_DOMAIN_ID=12
-
-
-#export PATH=$PATH:/usr/local/cuda-11.8/bin
-#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-11.8/lib64
-
-
-
-
-
-
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/hy/TensorRT-10.6.0.26/lib
-export PATH=/home/hy/TensorRT-10.6.0.26/bin:$PATH
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-
-
-
-#source /home/hy/acado/build/acado_env.sh
-export PATH=/home/hy/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi/bin:$PATH
-
-# >>> xmake >>>
-test -f "/home/hy/.xmake/profile" && source "/home/hy/.xmake/profile"
-# <<< xmake <<<
-
-# >>> fishros initialize >>>
-source /opt/ros/humble/setup.bash
-# <<< fishros initialize <<<
-
-#source /home/hy/moveit2_ws/install/setup.bash
-export PATH="$PATH:$HOME/.local/bin"
-
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
-
-
-
-
-
-
-
-
-
-export ROS_DOMAIN_ID=42
-#alias code='/usr/share/code/code --no-sandbox' 
-
-
+export ALLUSERSPROFILE=/opt/MVS/MVFG
+export LD_LIBRARY_PATH=/opt/MVS/lib/aarch64:$LD_LIBRARY_PATH
 # >>> wust_vision dev >>>
 py() { 
     source ~/anaconda3/etc/profile.d/conda.sh
@@ -211,7 +128,7 @@ buildme() {
 }
 
 builddebug() { 
-    colcon build --packages-select "$1" --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install
+    colcon build --packages-select "$1" --cmake-args -DCMAKE_BUILD_TYPE=Debug
 }
 
 killros() { 
@@ -236,24 +153,3 @@ hik() {
     export LD_LIBRARY_PATH=/opt/MVS/lib/64:/opt/MVS/lib/32:$LD_LIBRARY_PATH
 }
 # <<< wust_vision dev <<<
-. "$HOME/.cargo/env"
-. "$HOME/.cargo/env"
-export PATH="${HOME}/.bin:${PATH}"
-
-
-
-export PATH=/usr/local/go/bin:$PATH
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export LD_LIBRARY_PATH=/home/hy/TensorRT-10.6.0.26/lib:$LD_LIBRARY_PATH
-export CUDA_HOME=/usr/local/cuda-12.6
-export PATH=$CUDA_HOME/bin:$PATH
-export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/home/hy/onnxruntime-linux-x64-gpu-1.22.0/lib:$LD_LIBRARY_PATH
-
-#export LUCKFOX_SDK_PATH=/home/hy/luckfox-pico
-#export GLIBC_COMPILER=/usr/bin/arm-linux-gnueabihf-
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-export PATH=$JAVA_HOME/bin:$PATH
-source ~/acado/build/acado_env.sh
-
-source /usr/local/share/sentry_interfase/local_setup.bash

@@ -22,7 +22,7 @@ struct AutoAimDebugCtx {
     utils::Locked<AutoAimFsm> fsm_state;
     utils::Locked<std::pair<double, double>> gimbal_yaw_pitch;
     utils::Locked<std::vector<Vec3>> bullet_positions;
-
+    utils::Locked<ISO3> odom_in_camera_cv;
     CameraInfo camera_info() const noexcept {
         return camera_info_;
     }

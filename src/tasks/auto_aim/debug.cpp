@@ -30,9 +30,10 @@ void draw_auto_aim(cv::Mat& img, const AutoAimDebugCtx& ctx) {
     if (armor_target.check()) {
         auto target_state = armor_target.get_target_state();
         target_state.predict(Clock::now());
-        auto armors_pose_in_camera_cv = target_state.get_armors_pose(armor_target.target_number);
-        for (int i = 0; i < armors_pose_in_camera_cv.size(); ++i) {
-            auto& armor_pose_in_camera_cv = armors_pose_in_camera_cv[i];
+        auto armors_pose_in_odom = target_state.get_armors_pose(armor_target.target_number);
+        auto odom_in_camera_cv = ctx.odom_in_camera_cv.get();
+        for (int i = 0; i < armors_pose_in_odom.size(); ++i) {
+            auto& armor_pose_in_camera_cv = odom_in_camera_cv * armors_pose_in_odom[i];
             if (armor_pose_in_camera_cv.translation().z() > 0.1) {
                 auto image_points = utils::reprojection(
                     camera_info.camera_matrix,
@@ -59,6 +60,7 @@ void draw_auto_aim(cv::Mat& img, const AutoAimDebugCtx& ctx) {
         {
             auto center_pose = ISO3::Identity();
             center_pose.translation() = target_state.pos();
+            center_pose = odom_in_camera_cv * center_pose;
             auto center_image_points = utils::reprojection(
                 camera_info.camera_matrix,
                 camera_info.distortion_coefficients,

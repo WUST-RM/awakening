@@ -1,6 +1,5 @@
 #include "armor_tracker.hpp"
 #include "angles.h"
-#include "motion_model.hpp"
 #include "tasks/auto_aim/armor_tracker/armor_target.hpp"
 #include "tasks/auto_aim/type.hpp"
 #include "utils/common/type_common.hpp"
@@ -33,6 +32,9 @@ struct ArmorTracker::Impl {
                 ? init_target(t, armors, frame_id, camera_info, camera_cv_in_odom)
                 : update_target(t, armors, camera_info, camera_cv_in_odom);
             update_fsm(found, idx);
+            if (found) {
+                found_count_++;
+            }
             return found;
         };
 
@@ -112,8 +114,8 @@ struct ArmorTracker::Impl {
 
         for (const auto& m: matches) {
             if (m.second.color == ArmorColor::NONE || m.second.color == ArmorColor::PURPLE) {
-                if (++is_none_purple_count_ > 100)
-                    continue;
+                // if (++is_none_purple_count_ > 100)
+                continue;
             } else {
                 is_none_purple_count_ = 0;
             }

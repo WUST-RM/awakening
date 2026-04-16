@@ -13,21 +13,15 @@ class BallisticTrajectory {
 public:
     using Ptr = std::shared_ptr<BallisticTrajectory>;
 
-    enum class Type : int { RESISTANCE };
-
     struct Params {
         double gravity = 9.8;
         double resistance = 0.092;
-        int iter = 20;
 
         void load(const YAML::Node& config) {
             if (config["gravity"])
                 gravity = config["gravity"].as<double>();
             if (config["resistance"])
                 resistance = config["resistance"].as<double>();
-            if (config["iter"])
-                iter = config["iter"].as<int>();
-
             if (gravity <= 0.0) {
                 throw std::invalid_argument("gravity must be positive");
             }
@@ -37,7 +31,9 @@ public:
 public:
     explicit BallisticTrajectory(const YAML::Node& config) {
         params_.load(config);
-        type_ = str2Type(config["type"].as<std::string>());
+        k_ = std::max(params_.resistance, kEps);
+        inv_k_ = 1.0 / k_;
+        g_ = params_.gravity;
     }
 
     static Ptr create(const YAML::Node& config) {
@@ -45,72 +41,87 @@ public:
     }
 
     std::optional<double> solve_pitch(const Vec3& target_pos, double v0) const {
-        const double target_height = target_pos.z();
-        const double distance = std::hypot(target_pos.x(), target_pos.y());
+        const double h = target_pos.z();
+        const double d = std::hypot(target_pos.x(), target_pos.y());
 
-        if (distance < kEps || v0 < kEps) {
+        if (d < kEps || v0 < kEps) {
             return std::nullopt;
         }
 
-        auto f = [&](double pitch) {
-            double t = flight_time(distance, v0, pitch);
-            if (!std::isfinite(t))
-                return std::numeric_limits<double>::infinity();
+        // 防止 exp 溢出
+        const double kd = k_ * d;
+        if (kd > 700.0) {
+            return std::nullopt;
+        }
 
-            auto [x, y] = forward_model(pitch, v0, t);
-            return y - target_height;
+        // A = (exp(kd) - 1) / k
+        const double e = std::expm1(kd);
+        const double A = e * inv_k_;
+
+        // C = A / v0
+        const double C = A / v0;
+
+        // B = 0.5 * g * C^2
+        const double B = 0.5 * g_ * C * C;
+
+        // 二次方程: B*u^2 - A*u + (B + h) = 0
+        const double disc = A * A - 4.0 * B * (B + h);
+        if (disc < 0.0 || !std::isfinite(disc)) {
+            return std::nullopt;
+        }
+
+        const double sqrt_disc = std::sqrt(disc);
+        const double denom = 2.0 * B;
+
+        if (std::abs(denom) < kEps) {
+            return std::nullopt;
+        }
+
+        const double u1 = (A + sqrt_disc) / denom;
+        const double u2 = (A - sqrt_disc) / denom;
+
+        const double p1 = std::atan(u1);
+        const double p2 = std::atan(u2);
+
+        constexpr double left = -M_PI / 4.0;
+        constexpr double right = M_PI / 3.0;
+
+        auto valid = [&](double p) {
+            return std::isfinite(p) && p >= left && p <= right && std::abs(std::cos(p)) > kEps;
         };
 
-        double left = -M_PI / 4.0;
-        double right = M_PI / 3.0;
+        if (valid(p1))
+            return p1;
+        if (valid(p2))
+            return p2;
 
-        double f_left = f(left);
-        double f_right = f(right);
-
-        if (!std::isfinite(f_left) || !std::isfinite(f_right) || f_left * f_right > 0) {
-            return std::nullopt;
-        }
-
-        double mid = 0;
-        for (int i = 0; i < params_.iter; ++i) {
-            mid = 0.5 * (left + right);
-            double f_mid = f(mid);
-
-            if (!std::isfinite(f_mid))
-                return std::nullopt;
-
-            if (std::abs(f_mid) < 1e-4) {
-                return mid;
-            }
-
-            if (f_left * f_mid < 0) {
-                right = mid;
-                f_right = f_mid;
-            } else {
-                left = mid;
-                f_left = f_mid;
-            }
-        }
-
-        return mid;
+        return std::nullopt;
     }
 
     std::optional<std::pair<double, double>>
     solve_pitch_and_flytime(const Vec3& target_pos, double v0) const {
+        const double d = std::hypot(target_pos.x(), target_pos.y());
+
         auto pitch_opt = solve_pitch(target_pos, v0);
         if (!pitch_opt)
             return std::nullopt;
 
-        const double distance = std::hypot(target_pos.x(), target_pos.y());
-        double t = flight_time(distance, v0, *pitch_opt);
+        const double cos_theta = std::cos(*pitch_opt);
+        if (std::abs(cos_theta) < kEps)
+            return std::nullopt;
 
-        if (!std::isfinite(t) || t < 0) {
+        const double kd = k_ * d;
+        if (kd > 700.0)
+            return std::nullopt;
+
+        const double t = std::expm1(kd) / (k_ * v0 * cos_theta);
+
+        if (!std::isfinite(t) || t < 0.0) {
             return std::nullopt;
         }
 
         return std::make_pair(*pitch_opt, t);
     }
-
     std::pair<double, double> solve_distance_height(double pitch, double v0, double t) const {
         return forward_model(pitch, v0, t);
     }
@@ -119,53 +130,36 @@ private:
     static constexpr double kEps = 1e-6;
 
     Params params_;
-    Type type_;
 
-    static Type str2Type(std::string str) {
-        std::transform(str.begin(), str.end(), str.begin(), ::toupper);
+    double k_;
+    double inv_k_;
+    double g_;
 
-        if (str == "RESISTANCE")
-            return Type::RESISTANCE;
-
-        throw std::invalid_argument("Invalid type");
-    }
-
+private:
     double flight_time(double distance, double v0, double pitch) const {
         const double cos_theta = std::cos(pitch);
         if (std::abs(cos_theta) < kEps) {
             return std::numeric_limits<double>::infinity();
         }
 
-        switch (type_) {
-            case Type::RESISTANCE: {
-                double k = std::max(params_.resistance, kEps);
-                double arg = k * distance;
-
-                if (arg > 700.0)
-                    return std::numeric_limits<double>::infinity();
-
-                return std::expm1(arg) / (k * v0 * cos_theta);
-            }
+        const double kd = k_ * distance;
+        if (kd > 700.0) {
+            return std::numeric_limits<double>::infinity();
         }
 
-        return std::numeric_limits<double>::infinity();
+        return std::expm1(kd) / (k_ * v0 * cos_theta);
     }
 
     std::pair<double, double> forward_model(double pitch, double v0, double t) const {
-        const double g = params_.gravity;
+        const double cos_theta = std::cos(pitch);
 
-        switch (type_) {
-            case Type::RESISTANCE: {
-                double k = std::max(params_.resistance, kEps);
+        // x = ln(1 + k*v*cos*t) / k
+        const double x = std::log1p(k_ * v0 * cos_theta * t) * inv_k_;
 
-                double x = std::log1p(k * v0 * std::cos(pitch) * t) / k;
-                double y = v0 * std::sin(pitch) * t - 0.5 * g * t * t;
+        // y = v*sin*t - 0.5*g*t^2
+        const double y = v0 * std::sin(pitch) * t - 0.5 * g_ * t * t;
 
-                return { x, y };
-            }
-        }
-
-        return { 0.0, 0.0 };
+        return { x, y };
     }
 };
 struct Bullet {

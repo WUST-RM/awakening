@@ -1,6 +1,5 @@
 #include "armor_target.hpp"
 #include "angles.h"
-#include "tasks/auto_aim/armor_tracker/motion_model.hpp"
 #include "tasks/auto_aim/armor_tracker/motion_model_point.hpp"
 #include "tasks/auto_aim/type.hpp"
 #include "tasks/base/common.hpp"
@@ -107,6 +106,7 @@ void ArmorTarget::reset(
     track_state.reset();
     this_id = GOBAL_ID++;
 }
+
 void ArmorTarget::armor_pnp(Armor& a, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom)
     const noexcept {
     cv::Mat rvec, tvec;
@@ -277,8 +277,10 @@ bool ArmorTarget::update(
         if (!outpost_has_all_and_has_set_ids.value().first) {
             outpost_has_all_and_has_set_ids.value().second[id] = true;
             int count = 0;
-            for (auto his_id: outpost_has_all_and_has_set_ids.value().second) {
-                count++;
+            for (auto has_id: outpost_has_all_and_has_set_ids.value().second) {
+                if (has_id) {
+                    count++;
+                }
             }
             if (count >= outpost_has_all_and_has_set_ids->second.size()) {
                 outpost_has_all_and_has_set_ids->first = true;
@@ -287,21 +289,21 @@ bool ArmorTarget::update(
     }
     last_match_id = id;
     MeasureType mt = MeasureType::ARMOR;
-    if (armor.color_classifier) {
-        auto l = armor.color_classifier->light_colors[Armor::ColorClassifierCtx::LEFT];
-        auto r = armor.color_classifier->light_colors[Armor::ColorClassifierCtx::RIGHT];
-        if (jumped
-            && (outpost_has_all_and_has_set_ids.has_value()
-                    ? outpost_has_all_and_has_set_ids.value().first
-                    : true))
-        {
-            if (l == ArmorColor::NONE && r != ArmorColor::NONE) {
-                mt = MeasureType::R_LIGHT;
-            } else if (r == ArmorColor::NONE && l != ArmorColor::NONE) {
-                mt = MeasureType::L_LIGHT;
-            }
-        }
-    }
+    // if (armor.color_classifier) {
+    //     auto l = armor.color_classifier->light_colors[Armor::ColorClassifierCtx::LEFT];
+    //     auto r = armor.color_classifier->light_colors[Armor::ColorClassifierCtx::RIGHT];
+    //     if (jumped
+    //         && (outpost_has_all_and_has_set_ids.has_value()
+    //                 ? outpost_has_all_and_has_set_ids.value().first
+    //                 : true))
+    //     {
+    //         if (l == ArmorColor::NONE && r != ArmorColor::NONE) {
+    //             mt = MeasureType::R_LIGHT;
+    //         } else if (r == ArmorColor::NONE && l != ArmorColor::NONE) {
+    //             mt = MeasureType::L_LIGHT;
+    //         }
+    //     }
+    // }
     esekf.value().setUpdateR([&](const Eigen::Matrix<double, Z_N, 1>& z) {
         return measurement_covariance(z);
     });
@@ -328,80 +330,49 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(
     std::vector<std::pair<int, Armor>> result;
     const int n_obs = static_cast<int>(armors.size());
     const int armors_num = armor_num();
-    const double GATE = cfg.match_gate;
+    bool all_init =
+        (outpost_has_all_and_has_set_ids.has_value() ? outpost_has_all_and_has_set_ids.value().first
+                                                     : jumped);
+    const double GATE = all_init ? cfg.match_gate : cfg.match_gate_not_all_init;
     const double max_cost = 1e9;
     std::vector<std::vector<double>> cost(n_obs, std::vector<double>(armors_num, max_cost + 1));
-    if (!(outpost_has_all_and_has_set_ids.has_value()
-              ? outpost_has_all_and_has_set_ids.value().first
-              : true)
-        || !jumped)
-    {
-        auto armors_xyza = target_state.get_armors_xyza(target_number);
-        std::vector<double> obs_yaw(n_obs);
-        for (int j = 0; j < n_obs; ++j) {
-            armor_pnp(armors[j], camera_info, camera_cv_in_odom);
-            obs_yaw[j] = utils::R2yaw<ArmorTarget>(armors[j].pose.linear());
+
+    std::vector<VecZ> meas_list(n_obs);
+    for (int j = 0; j < n_obs; ++j) {
+        meas_list[j] = get_measurement(armors[j]);
+    }
+
+    for (int j = 0; j < n_obs; ++j) {
+        bool in_gate = false;
+        double min_d2 = std::numeric_limits<double>::max();
+        for (int id = 0; id < armors_num; ++id) {
+            Measure::Ctx tmp_ctx {
+                .armor_num = armors_num,
+                .id = id,
+                .camera_cv_in_odom = camera_cv_in_odom,
+                .camera_info = camera_info,
+                .armor_number = target_number,
+
+            };
+            Measure measure { .ctx = tmp_ctx };
+            VecZ z_pred;
+            measure.h(target_state.x, z_pred);
+
+            VecZ nu = meas_list[j] - z_pred;
+            auto R = measurement_covariance(z_pred);
+            double d2 = nu.transpose() * R.ldlt().solve(nu);
+
+            // 门控
+            if (std::isfinite(d2) && d2 < GATE) {
+                cost[j][id] = d2;
+                in_gate = true;
+            }
+            if (d2 < min_d2) {
+                min_d2 = d2;
+            }
         }
-        constexpr double MAX_YAW_ERROR = 30 * M_PI / 180.0;
-
-        for (int j = 0; j < n_obs; ++j) {
-            bool in_gate = false;
-            double min_yaw_diff = std::numeric_limits<double>::max();
-            for (int id = 0; id < armors_num; ++id) {
-                double yaw_diff = angles::shortest_angular_distance(
-                    angles::normalize_angle(obs_yaw[j]),
-                    angles::normalize_angle(armors_xyza[id][3])
-                );
-                if (yaw_diff < MAX_YAW_ERROR) {
-                    cost[j][id] = yaw_diff;
-                    in_gate = true;
-                }
-                if (yaw_diff < min_yaw_diff) {
-                    min_yaw_diff = yaw_diff;
-                }
-            }
-            if (!in_gate) {
-                AWAKENING_WARN("match out of gate min yaw diff: {}", min_yaw_diff);
-            }
-        }
-    } else {
-        std::vector<VecZ> meas_list(n_obs);
-        for (int j = 0; j < n_obs; ++j) {
-            meas_list[j] = get_measurement(armors[j]);
-        }
-
-        for (int j = 0; j < n_obs; ++j) {
-            bool in_gate = false;
-            double min_d2 = std::numeric_limits<double>::max();
-            for (int id = 0; id < armors_num; ++id) {
-                Measure::Ctx tmp_ctx {
-                    .armor_num = armors_num,
-                    .id = id,
-                    .camera_cv_in_odom = camera_cv_in_odom,
-                    .camera_info = camera_info,
-                    .armor_number = target_number,
-
-                };
-                Measure measure { .ctx = tmp_ctx };
-                VecZ z_pred;
-                measure.h(target_state.x, z_pred);
-
-                VecZ nu = meas_list[j] - z_pred;
-                auto R = measurement_covariance(z_pred);
-                double d2 = nu.transpose() * R.ldlt().solve(nu);
-
-                // 门控
-                if (std::isfinite(d2) && d2 < GATE) {
-                    cost[j][id] = d2;
-                    in_gate = true;
-                }
-                if (d2 < min_d2) {
-                    min_d2 = d2;
-                }
-            }
-            if (!in_gate) {
-                AWAKENING_WARN("match out of gate min d2: {}", min_d2);
-            }
+        if (!in_gate) {
+            AWAKENING_WARN("match out of gate min d2: {}", min_d2);
         }
     }
 

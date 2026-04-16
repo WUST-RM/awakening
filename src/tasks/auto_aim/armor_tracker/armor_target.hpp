@@ -1,6 +1,5 @@
 #pragma once
 #include "angles.h"
-#include "motion_model.hpp"
 #include "motion_model_point.hpp"
 #include "tasks/auto_aim/type.hpp"
 #include "tasks/base/web.hpp"
@@ -19,6 +18,7 @@ struct ArmorTrackerCfg {
     double max_yaw_diff_deg;
     double max_dis_diff;
     double match_gate;
+    double match_gate_not_all_init;
     double qyaw_common;
     double qyaw_output;
     Vec3 qxyz_common;
@@ -35,6 +35,7 @@ struct ArmorTrackerCfg {
         max_yaw_diff_deg = config["max_yaw_diff_deg"].as<double>();
         max_dis_diff = config["max_dis_diff"].as<double>();
         match_gate = config["match_gate"].as<double>();
+        match_gate_not_all_init = config["match_gate_not_all_init"].as<double>();
         qyaw_common = config["qyaw_common"].as<double>();
         qyaw_output = config["qyaw_output"].as<double>();
         auto qxyz_common_vec = config["qxyz_common"].as<std::vector<double>>();

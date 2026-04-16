@@ -89,6 +89,7 @@ struct Predict {
         if (ceres::abs(vyaw) > T(20.0)) {
             vyaw = T(0.0);
         }
+
     }
     void f(const VecX& x0, VecX& x1) const {
         assert(x0.size() == X_N);
@@ -235,7 +236,7 @@ struct Measure {
     void armor_pose(const T x[X_N], T& ax, T& ay, T& az, T& yaw) const {
         yaw = normalize_angle(x[idx::YAW] + T(ctx.id) * T(2.0 * M_PI / ctx.armor_num));
 
-        const bool outpost = (ctx.armor_num == 3);
+        const bool outpost = (ctx.armor_number == auto_aim::ArmorClass::OUTPOST);
         const bool use_lh = (ctx.armor_num == 4) && (ctx.id & 1);
 
         const T r = get_armor_r(x);
@@ -257,8 +258,7 @@ struct State {
     VecX x;
     TimePoint timestamp;
     int frame_id = 0;
-    std::optional<ISO3> oldest_in_new;
-    double oldest_yaw;
+
     std::vector<Vec4> get_armors_xyza(auto_aim::ArmorClass armor_number) const {
         std::vector<Vec4> r;
         int armor_num = armor_num_by_armor_class(armor_number);
@@ -267,6 +267,7 @@ struct State {
             Measure::Ctx ctx;
             ctx.id = i;
             ctx.armor_num = armor_num;
+            ctx.armor_number = armor_number;
             Measure m {
                 .ctx = ctx,
             };
@@ -285,57 +286,28 @@ struct State {
             : auto_aim::FIFTTEN_DEGREE_RAD;
         int armor_num = armor_num_by_armor_class(armor_number);
         r.reserve(armor_num);
-        State tmp = *this;
-        if (oldest_in_new) {
-            tmp.transform(oldest_in_new.value().inverse(), frame_id);
-            tmp.x[idx::YAW] = oldest_yaw;
-        }
         for (int i = 0; i < armor_num; ++i) {
             Measure::Ctx ctx;
             ctx.id = i;
             ctx.armor_num = armor_num;
+            ctx.armor_number = armor_number;
             Measure m {
                 .ctx = ctx,
             };
             double ax, ay, az, ayaw;
-            m.armor_pose(tmp.x.data(), ax, ay, az, ayaw);
+            m.armor_pose(x.data(), ax, ay, az, ayaw);
             ISO3 pose;
             auto p = Vec3 { ax, ay, az };
             pose.translation() = p;
             Mat3 R = utils::euler2matrix(Vec3 { ayaw, armor_pitch, 0 }, utils::EulerOrder::ZYX);
             pose.linear() = R;
-            if (oldest_in_new) {
-                pose = oldest_in_new.value() * pose;
-            }
+
             r.push_back(pose);
         }
 
         return r;
     }
-    void transform(const ISO3& old_in_new, int new_frame_id) {
-        oldest_yaw = x[idx::YAW];
-        auto old_pose = ISO3::Identity();
-        Vec3 p_new = old_in_new * pos();
-        x[idx::CX] = p_new.x();
-        x[idx::CY] = p_new.y();
-        x[idx::CZ] = p_new.z();
 
-        auto old_vel = vel();
-        Vec3 v_new = old_in_new.linear() * vel();
-        x[idx::VCX] = v_new.x();
-        x[idx::VCY] = v_new.y();
-        x[idx::VCZ] = v_new.z();
-
-        double yaw_offset = std::atan2(old_in_new.linear()(1, 0), old_in_new.linear()(0, 0));
-        x[idx::YAW] += yaw_offset;
-
-        frame_id = new_frame_id;
-        if (!oldest_in_new) {
-            oldest_in_new = old_in_new;
-            return;
-        }
-        oldest_in_new.value() = old_in_new * oldest_in_new.value();
-    }
     void predict(const TimePoint& t) {
         auto dt = std::chrono::duration<double>(t - timestamp).count();
         predict(dt);
