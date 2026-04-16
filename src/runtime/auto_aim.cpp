@@ -1,3 +1,4 @@
+#include "ascii_banner.hpp"
 #include "tasks/base/ballistic_trajectory.hpp"
 #include <chrono>
 #include <cstdint>
@@ -135,6 +136,7 @@ bool is_web_running() {
 }
 
 int main(int argc, char** argv) {
+    print_banner();
     auto& signal = utils::SignalGuard::instance();
     logger::init(spdlog::level::trace);
     auto get_arg = [&](int i) -> std::optional<std::string> {
