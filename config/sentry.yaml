@@ -1,6 +1,6 @@
 enemy_color: red
 max_infer_num: 5
-bullet_speed: 23.0
+bullet_speed: 21.0
 
 serial:
   enable: true
@@ -19,10 +19,10 @@ player:
 
 tf:
   camera_in_gimbal:
-    t: [0.14,0.05,0.0]
+    t: [0.00,0.00,0.08]
     R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
   shoot_in_gimbal:
-    t: [0.2,0.0,0.0]
+    t: [0.1,0.0,0.0]
     R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
 
 bullet_pick_up:
@@ -46,7 +46,7 @@ armor_detector:
     model_type: tup
     conf_threshold: 0.2
   net_detector:
-    backend: tensorrt
+    backend: openvino
     openvino:
       model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
       device_name: "GPU"
@@ -73,6 +73,7 @@ armor_tracker:
   max_yaw_diff_deg: 60.0
   max_dis_diff: 3.0
   match_gate: 300.0
+  match_gate_not_all_init: 3000.0
   qxyz_common: [20.0, 20.0, 1.0]
   qyaw_common: 10.0
   qxyz_output: [10.0, 10.0, 0.5]
@@ -81,7 +82,7 @@ armor_tracker:
   q_l: 0.0000001
   q_h: 0.0000001
   q_outpost_dz: 0.5
-  r_uv: 30.0
+  r_uv: 50.0
   esekf_iter_num: 5
 
 auto_aim_fsm:
@@ -95,8 +96,8 @@ auto_aim_fsm:
 
 
 very_aimer:
-  base_yaw_offset: -1.0
-  base_pitch_offset: -3.0
+  base_yaw_offset: -0.5
+  base_pitch_offset: 2.0
   # base_yaw_offset: -0.0
   # base_pitch_offset: -0.0
   sample_total_time: 1.0
@@ -129,7 +130,7 @@ very_aimer:
 
 camera: 
   hik_camera:
-    target_sn: DA3038891
+    target_sn: DA2166432
     adc_bit_depth: Bits_8
     pixel_format: BayerRG8 #RGB8Packed
     reverse_x: false
@@ -139,7 +140,7 @@ camera:
     offset_x: 0
     offset_y: 0
     acquisition_frame_rate_enable: true
-    acquisition_frame_rate: 250
+    acquisition_frame_rate: 200
     exposure_time: 1500
     gain: 16.9
     gamma: 0.7 #Bayer用不了

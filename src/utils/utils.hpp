@@ -272,16 +272,7 @@ inline std::vector<uint8_t> to_vector(const T& data) {
     std::memcpy(packet.data(), &data, sizeof(T));
     return packet;
 }
-template<class Tag>
-[[nodiscard]] double R2yaw(const Mat3& R) noexcept {
-    static double last_yaw = 0;
-    double roll, pitch, yaw;
-    const auto euler = utils::matrix2euler(R, utils::EulerOrder::ZYX);
-    yaw = euler[0];
-    yaw = last_yaw + angles::shortest_angular_distance(last_yaw, yaw);
-    last_yaw = yaw;
-    return yaw;
-}
+
 inline std::vector<cv::Point2f> reprojection(
     const cv::Mat& camera_matrix,
     const cv::Mat& dist_coeffs,

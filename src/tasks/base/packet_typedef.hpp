@@ -33,10 +33,6 @@ struct ReceiveRobotData {
     float bullet_speed;
     uint8_t detect_color; //0 r 1 b
     uint32_t bullet_count; //发出弹+1
-    // struct RunTimeOffset{
-    //     float yaw;
-    //     float pitch;
-    // };
 
     static std::optional<ReceiveRobotData> create(const std::vector<uint8_t>& data) {
         if (data.size() != sizeof(ReceiveRobotData) || data[0] != ID)

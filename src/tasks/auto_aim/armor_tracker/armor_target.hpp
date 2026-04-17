@@ -80,7 +80,7 @@ public:
     void armor_pnp(Armor& a, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom)
         const noexcept;
     void reset(
-        const Armor& a,
+        Armor& a,
         const ArmorTrackerCfg& c,
         const TimePoint& timestamp,
         int frame_id,
@@ -107,7 +107,7 @@ public:
     get_measurement(Armor& a, const VecZ& z_pred, MeasureType mt) const noexcept;
     void predict_ekf(const TimePoint& timestamp);
     bool update(
-        const std::pair<int, Armor>& a,
+        std::pair<int, Armor>& a,
         const TimePoint& timestamp,
         const CameraInfo& camera_info,
         const ISO3& camera_cv_in_odom

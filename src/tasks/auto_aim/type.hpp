@@ -6,6 +6,7 @@
 #include <iostream>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
+#include <opencv2/imgproc.hpp>
 #include <optional>
 #include <string>
 #include <utility>
@@ -51,6 +52,11 @@ enum class ArmorKeyPointsIndex : int {
     // RIGHT_MID,
     N
 };
+inline std::string string_by_armor_key_points_index(int index) {
+    constexpr const char* details[] = { "left_top", "left_bottom", "right_bottom", "right_top" };
+    return std::string(details[index]);
+}
+
 namespace armor_keypoints {
     using I = ArmorKeyPointsIndex;
     constexpr std::array sys_pairs = {
@@ -178,12 +184,6 @@ inline std::string string_by_armor_class(ArmorClass armor_class) {
     return std::string(details[std::to_underlying(armor_class)]);
 }
 
-inline std::string string_by_armor_key_points_index(int index) {
-    constexpr const char* details[] = { "right_bottom", "right_top", "left_top",
-                                        "left_bottom",  "left_mid",  "right_mid" };
-    return std::string(details[index]);
-}
-
 struct Armor {
     ArmorColor color = ArmorColor::NONE;
     ArmorClass number = ArmorClass::UNKNOWN;
@@ -263,7 +263,12 @@ struct Armor {
 
         using I = ArmorKeyPointsIndex;
 
-        auto get = [&](I idx) -> cv::Point { return pts[std::to_underlying(idx)]; };
+        auto get = [&](I idx) -> cv::Point {
+            auto p = pts[std::to_underlying(idx)];
+            // cv::circle(img, p, 5,cv::Scalar(0, 255, 0));
+            // cv::putText(img, string_by_armor_key_points_index(std::to_underlying(idx)),p, cv::FONT_HERSHEY_COMPLEX, 0.5, cv::Scalar(0, 255, 0));
+            return p;
+        };
 
         cv::Point lt = get(I::LEFT_TOP);
         cv::Point rt = get(I::RIGHT_TOP);

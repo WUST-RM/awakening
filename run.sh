@@ -61,7 +61,17 @@ if [ "$1" == "rebuild" ]; then
 else
     mkdir -p "$BUILD_DIR"
 fi
+current_time=$(date +%s)
 
+find "$WORK_DIR"/src -type f | while read file; do
+  file_mod_time=$(stat --format=%Y "$file")
+
+  if [ "$file_mod_time" -gt "$current_time" ]; then
+    echo "Updating timestamp for: $file"
+    touch "$file" 
+  fi
+done
+touch "$WORK_DIR"/src/relink.cpp
 if [[ "$1" == "build" || "$1" == "rebuild" || "$1" == "run" ]]; then
 
     echo -e "${yellow}<--- Start CMake (Ninja) --->${reset}"

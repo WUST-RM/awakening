@@ -29,7 +29,7 @@ void draw_auto_aim(cv::Mat& img, const AutoAimDebugCtx& ctx) {
     armors.draw(img);
     if (armor_target.check()) {
         auto target_state = armor_target.get_target_state();
-        target_state.predict(Clock::now());
+        target_state.predict(Clock::now(), armor_target.target_number);
         auto armors_pose_in_odom = target_state.get_armors_pose(armor_target.target_number);
         auto odom_in_camera_cv = ctx.odom_in_camera_cv.get();
         for (int i = 0; i < armors_pose_in_odom.size(); ++i) {
@@ -60,18 +60,30 @@ void draw_auto_aim(cv::Mat& img, const AutoAimDebugCtx& ctx) {
         {
             auto center_pose = ISO3::Identity();
             center_pose.translation() = target_state.pos();
+            auto vel_pose = center_pose;
+            vel_pose.translation() += target_state.vel();
             center_pose = odom_in_camera_cv * center_pose;
+            vel_pose = odom_in_camera_cv * vel_pose;
             auto center_image_points = utils::reprojection(
                 camera_info.camera_matrix,
                 camera_info.distortion_coefficients,
                 { cv::Point3f(0, 0, 0) },
                 center_pose
             );
+            auto vel_image_points = utils::reprojection(
+                camera_info.camera_matrix,
+                camera_info.distortion_coefficients,
+                { cv::Point3f(0, 0, 0) },
+                vel_pose
+            );
             cv::Point2f center = center_image_points[0];
+            cv::Point2f vel = vel_image_points[0];
             const double scale = 50.0;
             const double dy = scale * target_state.vyaw();
             const cv::Point2f start_pt = center;
-            const cv::Point2f end_pt = start_pt + cv::Point2f(0, dy);
+            cv::Point2f end_pt = start_pt + cv::Point2f(0, dy);
+            cv::arrowedLine(img, start_pt, end_pt, cv::Scalar(50, 255, 50), 3, cv::LINE_AA, 0, 0.1);
+            end_pt = vel;
             cv::arrowedLine(img, start_pt, end_pt, cv::Scalar(50, 255, 50), 3, cv::LINE_AA, 0, 0.1);
             cv::circle(img, center, 5, cv::Scalar(50, 255, 50), -1);
             cv::putText(

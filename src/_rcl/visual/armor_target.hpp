@@ -61,7 +61,7 @@ inline void pub_armor_target_marker(
     visualization_msgs::msg::MarkerArray marker_array;
     if (target.check()) {
         auto target_state = target.get_target_state();
-        target_state.predict(Clock::now());
+        target_state.predict(Clock::now(), target.target_number);
         position_marker.header.frame_id = frame_id;
         position_marker.header.stamp = rclcpp::Clock().now();
         position_marker.action = visualization_msgs::msg::Marker::ADD;

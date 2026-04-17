@@ -47,8 +47,6 @@ public:
         if (d < kEps || v0 < kEps) {
             return std::nullopt;
         }
-
-        // 防止 exp 溢出
         const double kd = k_ * d;
         if (kd > 700.0) {
             return std::nullopt;

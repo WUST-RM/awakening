@@ -1,4 +1,4 @@
-enemy_color: red
+enemy_color: blue
 max_infer_num: 5
 bullet_speed: 23.0
 
@@ -9,7 +9,7 @@ serial:
   char_size: 8
   read_buf_size: 4096
 
-use_sim: false
+use_sim: true
 
 recorder:
   enable: false
@@ -73,6 +73,7 @@ armor_tracker:
   max_yaw_diff_deg: 60.0
   max_dis_diff: 3.0
   match_gate: 300.0
+  match_gate_not_all_init: 3000.0
   qxyz_common: [20.0, 20.0, 1.0]
   qyaw_common: 10.0
   qxyz_output: [10.0, 10.0, 0.5]

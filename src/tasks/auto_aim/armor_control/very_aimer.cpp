@@ -629,7 +629,7 @@ struct VeryAimer::Impl {
         for (int iter = 0; iter < 10; ++iter) {
             auto i_target = hit_time_target;
             i_target.set_target_state([&](armor_point_motion_model::State& state) {
-                state.predict(prev_fly_time);
+                state.predict(prev_fly_time, i_target.target_number);
             });
             auto iter_select = select_armor(i_target, fsm);
             const auto iter_armors_xyza =
@@ -651,7 +651,9 @@ struct VeryAimer::Impl {
         const double predict_time = prev_fly_time + params_.prediction_delay
             + (fsm == AutoAimFsm::AIM_WHOLE_CAR_CENTER ? params_.aim_center_more_prediction_time : 0
             );
-        hit_time_target.set_target_state([&](auto& state) { state.predict(predict_time); });
+        hit_time_target.set_target_state([&](auto& state) {
+            state.predict(predict_time, hit_time_target.target_number);
+        });
         return HitCtx {
             .hit_time_target = hit_time_target,
             .fly_time = prev_fly_time,
@@ -679,7 +681,7 @@ struct VeryAimer::Impl {
         }
         auto target = _target;
         target.set_target_state([&](armor_point_motion_model::State& state) {
-            state.predict(Clock::now());
+            state.predict(Clock::now(), target.target_number);
         });
 
         if (!is_same) {
@@ -705,7 +707,7 @@ struct VeryAimer::Impl {
                                    AimPoint& out_ap) -> bool {
                 auto tmp_target = base_target;
                 tmp_target.set_target_state([&](armor_point_motion_model::State& state) {
-                    state.predict(t);
+                    state.predict(t, tmp_target.target_number);
                 });
 
                 auto hit_opt = get_hit(tmp_target, bullet_speed, fsm_mode);
@@ -731,6 +733,7 @@ struct VeryAimer::Impl {
                                   double dt) -> bool {
                 int half = horizon / 2;
                 const int delay_steps = params_.control_delay * 2.0 / dt;
+
                 for (int i = (fsm != AutoAimFsm::AIM_WHOLE_CAR_CENTER ? half : delay_steps); i >= 1;
                      --i) {
                     double t = -i * dt;

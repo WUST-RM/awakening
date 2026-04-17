@@ -6,8 +6,10 @@
 #include "utils/common/type_common.hpp"
 #include "utils/logger.hpp"
 #include "utils/utils.hpp"
+#include <Eigen/src/Core/Matrix.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
 #include <optional>
@@ -16,20 +18,20 @@
 #include <vector>
 namespace awakening::auto_aim {
 void ArmorTarget::reset(
-    const Armor& _a,
+    Armor& a,
     const ArmorTrackerCfg& c,
     const TimePoint& timestamp,
     int frame_id,
     const CameraInfo& camera_info,
     const ISO3& camera_cv_in_odom
 ) {
-    auto a = _a;
     cfg = c;
     measure_ctx.armor_num = armor_num_by_armor_class(a.number);
     measure_ctx.id = 0;
     measure_ctx.armor_number = a.number;
     measure_ctx.camera_cv_in_odom = camera_cv_in_odom;
     measure_ctx.camera_info = camera_info;
+    target_number = a.number;
     double r_pre;
     Eigen::DiagonalMatrix<double, X_N> p0;
     if (a.number == ArmorClass::OUTPOST) {
@@ -51,7 +53,7 @@ void ArmorTarget::reset(
         return r;
     };
     esekf = RobotStateESEKF(
-        Predict { .dt = 0.005, .model = MotionModel::CONSTANT_VEL_ROT },
+        Predict { .dt = 0.005, .armor_number = target_number },
         Measure { .ctx = measure_ctx },
         u_q,
         u_r,
@@ -80,18 +82,21 @@ void ArmorTarget::reset(
     const double xa = pos.x();
     const double ya = pos.y();
     const double za = pos.z();
-    const double yaw = utils::R2yaw<ArmorTarget>(a.pose.linear());
+    auto ypr = utils::matrix2euler(a.pose.linear(), utils::EulerOrder::ZYX);
+    const double yaw = ypr[0];
 
     target_state.x = Eigen::VectorXd::Zero(X_N);
     const double r = r_pre;
     const double xc = xa + r * cos(yaw);
     const double yc = ya + r * sin(yaw);
     const double zc = za;
-    target_state.x << xc, 0, yc, 0, zc, 0, yaw, 0, r, 0, 0;
+    double l = 0.0;
+    double h = 0.0;
+    target_state.x << xc, 0, yc, 0, zc, 0, yaw, 0, r, l, h;
     target_state.timestamp = timestamp;
     target_state.frame_id = frame_id;
     esekf.value().setState(target_state.x);
-    target_number = a.number;
+
     last_update = timestamp;
     is_inited = true;
     jumped = false;
@@ -123,11 +128,13 @@ void ArmorTarget::armor_pnp(Armor& a, const CameraInfo& camera_info, const ISO3&
     {
         // continue;
     }
-
+    // auto rvec = rvecs[0];
+    // auto tvec = tvecs[0];
     cv::Mat R_cv_armor_in_camera_cv;
     cv::Rodrigues(rvec, R_cv_armor_in_camera_cv);
     Mat3 R_eigen_armor_in_camera_cv = Mat3::Zero();
     cv::cv2eigen(R_cv_armor_in_camera_cv, R_eigen_armor_in_camera_cv);
+
     Vec3 t_eigen_armor_in_camera_cv = Vec3::Zero();
     cv::cv2eigen(tvec, t_eigen_armor_in_camera_cv);
     a.pose.translation() = t_eigen_armor_in_camera_cv;
@@ -250,17 +257,14 @@ void ArmorTarget::predict_ekf(const TimePoint& timestamp) {
         throw std::runtime_error("ESEKF is not initialized");
     }
     auto dt = std::chrono::duration<double>(timestamp - target_state.timestamp).count();
-    esekf.value().setPredictFunc(Predict { .dt = dt,
-                                           .model = target_number != ArmorClass::OUTPOST
-                                               ? MotionModel::CONSTANT_VEL_ROT
-                                               : MotionModel::CONSTANT_ROTATION });
+    esekf.value().setPredictFunc(Predict { .dt = dt, .armor_number = target_number });
     esekf.value().setUpdateQ([&]() { return process_noise(dt); });
     target_state.x = esekf.value().predict();
     target_state.timestamp = timestamp;
     this_id = GOBAL_ID++;
 }
 bool ArmorTarget::update(
-    const std::pair<int, Armor>& a,
+    std::pair<int, Armor>& a,
     const TimePoint& timestamp,
     const CameraInfo& camera_info,
     const ISO3& camera_cv_in_odom
@@ -289,31 +293,17 @@ bool ArmorTarget::update(
     }
     last_match_id = id;
     MeasureType mt = MeasureType::ARMOR;
-    // if (armor.color_classifier) {
-    //     auto l = armor.color_classifier->light_colors[Armor::ColorClassifierCtx::LEFT];
-    //     auto r = armor.color_classifier->light_colors[Armor::ColorClassifierCtx::RIGHT];
-    //     if (jumped
-    //         && (outpost_has_all_and_has_set_ids.has_value()
-    //                 ? outpost_has_all_and_has_set_ids.value().first
-    //                 : true))
-    //     {
-    //         if (l == ArmorColor::NONE && r != ArmorColor::NONE) {
-    //             mt = MeasureType::R_LIGHT;
-    //         } else if (r == ArmorColor::NONE && l != ArmorColor::NONE) {
-    //             mt = MeasureType::L_LIGHT;
-    //         }
-    //     }
-    // }
     esekf.value().setUpdateR([&](const Eigen::Matrix<double, Z_N, 1>& z) {
         return measurement_covariance(z);
     });
 
     measure_ctx.id = id;
     measure_ctx.camera_cv_in_odom = camera_cv_in_odom;
+
     Measure measure { .ctx = measure_ctx };
     VecZ z_pred;
     measure.h(target_state.x, z_pred);
-    auto measurement = get_measurement(armor);
+    auto measurement = get_measurement(armor, z_pred, mt);
     esekf.value().setMeasureFunc(measure);
 
     target_state.x = esekf.value().update(measurement);
@@ -362,7 +352,6 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(
             auto R = measurement_covariance(z_pred);
             double d2 = nu.transpose() * R.ldlt().solve(nu);
 
-            // 门控
             if (std::isfinite(d2) && d2 < GATE) {
                 cost[j][id] = d2;
                 in_gate = true;
@@ -420,9 +409,10 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(
         return cv::Rect(0, 0, image_size.width, image_size.height);
     }
 
-    const float car_box_half =
-        std::max(target_state.r(), target_state.r() + target_state.l()) + 0.15f;
-
+    float car_box_half = std::max(target_state.r(), target_state.r() + target_state.l()) + 0.15f;
+    if (target_number == ArmorClass::OUTPOST) {
+        car_box_half = target_state.r() + 0.15f;
+    }
     static std::vector<cv::Point3f> CAR_BOX;
     CAR_BOX = { { 0, car_box_half, -car_box_half },
                 { 0, -car_box_half, -car_box_half },
@@ -430,6 +420,9 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(
                 { 0, car_box_half, car_box_half } };
 
     auto target_pos_in_odom = target_state.pos();
+    if (target_number == ArmorClass::OUTPOST) {
+        target_pos_in_odom.z() += (target_state.outpost01DZ() + target_state.outpost02DZ()) / 2.0;
+    }
     auto target_pos_in_camera_cv = camera_cv_in_odom.inverse() * target_pos_in_odom;
 
     if (target_pos_in_camera_cv.z() <= 0.2) {
@@ -530,7 +523,7 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(
 ) const noexcept {
     std::vector<cv::Point2f> pts;
     auto tmp_target_state = target_state;
-    tmp_target_state.predict(timestamp);
+    tmp_target_state.predict(timestamp, target_number);
     const int armors_num = armor_num();
     for (int id = 0; id < armors_num; ++id) {
         Measure::Ctx tmp_ctx {

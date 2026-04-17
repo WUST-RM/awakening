@@ -14,8 +14,6 @@
 #include <vector>
 namespace awakening::armor_point_motion_model {
 
-enum class MotionModel { CONSTANT_VELOCITY, CONSTANT_ROTATION, CONSTANT_VEL_ROT };
-
 constexpr int X_N = 11;
 constexpr int Z_N = 8;
 
@@ -48,48 +46,49 @@ inline T normalize_angle(T a) {
 
 struct Predict {
     double dt { 0.0 };
-    MotionModel model { MotionModel::CONSTANT_VEL_ROT };
+
+    auto_aim::ArmorClass armor_number = auto_aim::ArmorClass::UNKNOWN;
 
     template<typename T>
     void operator()(const T x0[X_N], T x1[X_N]) const {
         std::copy(x0, x0 + X_N, x1);
 
-        if (model != MotionModel::CONSTANT_ROTATION) {
-            x1[idx::CX] += x0[idx::VCX] * T(dt);
-            x1[idx::CY] += x0[idx::VCY] * T(dt);
-            x1[idx::CZ] += x0[idx::VCZ] * T(dt);
-        } else {
-            x1[idx::VCX] = x1[idx::VCY] = x1[idx::VCZ] = T(0);
-        }
+        // if (armor_number != auto_aim::ArmorClass::OUTPOST) {
+        x1[idx::CX] += x0[idx::VCX] * T(dt);
+        x1[idx::CY] += x0[idx::VCY] * T(dt);
+        x1[idx::CZ] += x0[idx::VCZ] * T(dt);
+        // } else {
+        //     x1[idx::VCX] = x1[idx::VCY] = x1[idx::VCZ] = T(0);
+        // }
 
-        if (model != MotionModel::CONSTANT_VELOCITY) {
-            x1[idx::YAW] += x0[idx::VYAW] * T(dt);
-        } else {
-            x1[idx::VYAW] = T(0);
-        }
+        x1[idx::YAW] += x0[idx::VYAW] * T(dt);
 
         clamp(x1);
     }
 
     template<typename T>
-    static void clamp(T x[X_N]) {
+    void clamp(T x[X_N]) const {
         auto& r = x[idx::R];
         auto& l = x[idx::L];
         auto& h = x[idx::H];
         auto& vyaw = x[idx::VYAW];
+        if (armor_number != auto_aim::ArmorClass::OUTPOST) {
+            if (r + l < T(0.1) || r + l > T(0.5)) {
+                r = T(0.25);
+                l = T(0);
+            }
 
-        if (r + l < T(0.1) || r + l > T(0.5)) {
-            r = T(0.25);
-            l = T(0);
+            if (ceres::abs(h) > T(0.5)) {
+                h = T(0.0);
+            }
+        } else {
+            x[idx::VCZ] = T(0.0);
+            r = T(0.27);
         }
 
-        if (ceres::abs(h) > T(0.5)) {
-            h = T(0.0);
-        }
         if (ceres::abs(vyaw) > T(20.0)) {
             vyaw = T(0.0);
         }
-
     }
     void f(const VecX& x0, VecX& x1) const {
         assert(x0.size() == X_N);
@@ -308,12 +307,12 @@ struct State {
         return r;
     }
 
-    void predict(const TimePoint& t) {
+    void predict(const TimePoint& t, auto_aim::ArmorClass armor_number) {
         auto dt = std::chrono::duration<double>(t - timestamp).count();
-        predict(dt);
+        predict(dt, armor_number);
     }
-    void predict(double dt) {
-        Predict p { .dt = dt, .model = MotionModel::CONSTANT_VEL_ROT };
+    void predict(double dt, auto_aim::ArmorClass armor_number) {
+        Predict p { .dt = dt, .armor_number = armor_number };
         p.f(x, x);
         timestamp +=
             std::chrono::duration_cast<TimePoint::duration>(std::chrono::duration<double>(dt));

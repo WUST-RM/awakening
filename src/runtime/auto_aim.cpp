@@ -336,7 +336,7 @@ int main(int argc, char** argv) {
                 frame.img_frame.timestamp
             );
             target.set_target_state([&](armor_point_motion_model::State& state) {
-                state.predict(frame.img_frame.timestamp);
+                state.predict(frame.img_frame.timestamp, target.target_number);
             });
             auto bbox = target.expanded_one_one(
                 frame.img_frame.timestamp,
@@ -370,10 +370,11 @@ int main(int argc, char** argv) {
                 gimbal_2_gimbal_odom.translation() = Vec3(0, 0, 0);
                 gimbal_2_gimbal_odom.linear() =
                     utils::euler2matrix(Vec3(yaw, pitch, roll), utils::EulerOrder::ZYX);
+                TimePoint serial_time = Clock::now();
                 tf->push(
                     SimpleFrame::GIMBAL_ODOM,
                     SimpleFrame::GIMBAL,
-                    Clock::now(),
+                    serial_time,
                     gimbal_2_gimbal_odom
                 );
                 robo.update_log();
@@ -538,10 +539,13 @@ int main(int argc, char** argv) {
         if (serial) {
             SendRobotCmdData send;
             send.cmd_ID = SendRobotCmdData::ID;
-            send.time_stamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                  std::chrono::steady_clock::now().time_since_epoch()
+            static auto start = std::chrono::steady_clock::now();
+
+            uint32_t t = std::chrono::duration_cast<std::chrono::microseconds>(
+                             std::chrono::steady_clock::now() - start
             )
-                                  .count();
+                             .count();
+            send.time_stamp = t;
             send.appear = cmd.appear;
             send.detect_color = std::to_underlying(enemy_color);
             send.yaw = cmd.yaw;

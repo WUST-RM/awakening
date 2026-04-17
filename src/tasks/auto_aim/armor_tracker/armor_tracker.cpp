@@ -10,6 +10,7 @@
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/core/types.hpp>
 #include <utility>
+#include <vector>
 namespace awakening::auto_aim {
 struct ArmorTracker::Impl {
     Impl(const YAML::Node& config) {
@@ -27,6 +28,10 @@ struct ArmorTracker::Impl {
         last_track = armors.timestamp;
         lost_thres_ = std::abs(static_cast<int>(cfg_.lost_time_thres / dt));
         auto process = [&](int idx) {
+            // std::vector<ArmorClass> ignore = {};
+            // if (idx == pre_target_idx_) {
+            //     ignore.push_back(target_buf_[cur_target_idx_].target_number);
+            // }
             auto& t = target_buf_[idx];
             bool found = (t.track_state.tracker_state == ArmorTarget::TrackState::LOST)
                 ? init_target(t, armors, frame_id, camera_info, camera_cv_in_odom)
@@ -41,7 +46,7 @@ struct ArmorTracker::Impl {
         process(cur_target_idx_);
         auto& cur = target_buf_[cur_target_idx_];
         auto& pre = target_buf_[pre_target_idx_];
-
+        // if (target_buf_[cur_target_idx_].target_number != ArmorClass::OUTPOST) {
         if (cur.track_state.tracker_state == ArmorTarget::TrackState::TEMP_LOST) {
             process(pre_target_idx_);
 
@@ -52,30 +57,29 @@ struct ArmorTracker::Impl {
         } else if (cur.track_state.tracker_state == ArmorTarget::TrackState::TRACKING) {
             pre.track_state.tracker_state = ArmorTarget::TrackState::LOST;
         }
+        // }
 
         return target_buf_[cur_target_idx_].fast_copy_without_ekf();
     }
     bool init_target(
         ArmorTarget& target,
-        const Armors& armors,
+        Armors& armors,
         int frame_id,
         const CameraInfo& camera_info,
-        const ISO3& camera_cv_in_odom
+        const ISO3& camera_cv_in_odom,
+        std::vector<ArmorClass> ignore = {}
     ) noexcept {
         if (armors.armors.empty()) {
             return false;
         }
         bool found = false;
         Armor init_target;
-        Armors others = armors;
-        others.armors.clear();
         for (auto& a: armors.armors) {
             if (!(a.color == ArmorColor::NONE || a.color == ArmorColor::PURPLE) && !found) {
                 init_target = a;
                 found = true;
                 continue;
             }
-            others.armors.push_back(a);
         }
         if (!found) {
             return false;
@@ -83,14 +87,14 @@ struct ArmorTracker::Impl {
         AWAKENING_INFO("init target: {}", string_by_armor_class(init_target.number));
         target.reset(init_target, cfg_, armors.timestamp, frame_id, camera_info, camera_cv_in_odom);
         target.track_state.tracker_state = ArmorTarget::TrackState::DETECTING;
-        update_target(target, others, camera_info, camera_cv_in_odom);
         return true;
     }
     bool update_target(
         ArmorTarget& target,
-        const Armors& armors,
+        Armors& armors,
         const CameraInfo& camera_info,
-        const ISO3& camera_cv_in_odom
+        const ISO3& camera_cv_in_odom,
+        std::vector<ArmorClass> ignore = {}
     ) noexcept {
         if (armors.armors.empty())
             return false;
@@ -110,9 +114,9 @@ struct ArmorTracker::Impl {
             return false;
 
         int updated = 0;
-        const auto matches = target.match(candidates, camera_info, camera_cv_in_odom);
+        auto matches = target.match(candidates, camera_info, camera_cv_in_odom);
 
-        for (const auto& m: matches) {
+        for (auto& m: matches) {
             if (m.second.color == ArmorColor::NONE || m.second.color == ArmorColor::PURPLE) {
                 // if (++is_none_purple_count_ > 100)
                 continue;

@@ -60,6 +60,7 @@ configure_file(
     ${CMAKE_BINARY_DIR}/src/param_deliver.h            
     @ONLY
 )
+add_library(relink SHARED src/relink.cpp)
 include_directories(${PROJECT_NAME}_utils PUBLIC
     ${PROJECT_SOURCE_DIR}/src
     ${PROJECT_SOURCE_DIR}/3rdparty
@@ -83,6 +84,7 @@ target_link_libraries(${PROJECT_NAME}_utils
     spdlog::spdlog
     ${OpenCV_LIBS}
     ${BUILD_LIBS}
+    
 )
 file(GLOB_RECURSE AUTO_AIM_SOURCES CONFIGURE_DEPENDS src/tasks/auto_aim/*.cpp)
 add_library(${PROJECT_NAME}_auto_aim SHARED ${AUTO_AIM_SOURCES})
@@ -143,7 +145,7 @@ endif()
 
 function(add_common_executable exe_name src_file)
     add_executable(${exe_name} ${src_file})
-    target_link_libraries(${exe_name}  ${PROJECT_NAME}_utils)
+    target_link_libraries(${exe_name}  ${PROJECT_NAME}_utils relink)
 endfunction()
 add_common_executable(auto_aim src/runtime/auto_aim.cpp)
 
@@ -152,9 +154,13 @@ target_link_libraries(auto_aim
 )
 
 if(ROS2_FULL_FOUND)
-
+add_common_executable(nav src/runtime/nav.cpp)
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_rcl
+)
+target_link_libraries(nav
+    ${PROJECT_NAME}_rcl
+    ${PROJECT_NAME}_utils
 )
 
 endif()
