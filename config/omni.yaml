@@ -24,6 +24,9 @@ tf:
   shoot_in_gimbal:
     t: [0.2,0.0,0.0]
     R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
+wheel_odometry:
+  q_xyz: [10.0,10.0,1.0]
+  r_vxyz: [0.05,0.05,0.05]
 
 bullet_pick_up:
   ballistic_trajectory:
@@ -70,8 +73,6 @@ armor_detector:
 armor_tracker:
   lost_time_thres: 0.5
   tracking_thres: 10
-  max_yaw_diff_deg: 60.0
-  max_dis_diff: 3.0
   match_gate: 300.0
   match_gate_not_all_init: 3000.0
   qxyz_common: [20.0, 20.0, 1.0]
@@ -116,7 +117,7 @@ very_aimer:
   comming_angle: 55
   leaving_angle: 20
 
-  yaw_limit_deg: 60
+
   shooting_range_h: 0.12
   shooting_range_w_small: 0.12
   shooting_range_w_large: 0.24

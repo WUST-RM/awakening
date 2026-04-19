@@ -24,6 +24,10 @@ tf:
   shoot_in_gimbal:
     t: [0.1,0.0,0.0]
     R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
+wheel_odometry:
+  q_xyz: [10.0,10.0,1.0]
+  r_vxyz: [0.05,0.05,0.05]
+
 
 bullet_pick_up:
   ballistic_trajectory:
@@ -70,8 +74,6 @@ armor_detector:
 armor_tracker:
   lost_time_thres: 0.5
   tracking_thres: 10
-  max_yaw_diff_deg: 60.0
-  max_dis_diff: 3.0
   match_gate: 300.0
   match_gate_not_all_init: 3000.0
   qxyz_common: [20.0, 20.0, 1.0]
@@ -88,7 +90,7 @@ armor_tracker:
 auto_aim_fsm:
   single_whole_up: 1.5 
   single_whole_down: 1.0
-  whole_pair_up: 16.5 
+  whole_pair_up: 6.5 
   whole_pair_down: 7.5 #1s内至少换2次板子  2pi  否则轨迹规划无意义
   pair_center_up: 16.5
   pair_center_down: 15.0
@@ -97,7 +99,7 @@ auto_aim_fsm:
 
 very_aimer:
   base_yaw_offset: -0.5
-  base_pitch_offset: 2.0
+  base_pitch_offset: 0.0
   # base_yaw_offset: -0.0
   # base_pitch_offset: -0.0
   sample_total_time: 1.0

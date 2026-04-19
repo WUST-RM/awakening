@@ -23,7 +23,9 @@ struct ReceiveRobotData {
     static constexpr uint8_t ID = 0x02;
 
     uint8_t cmd_ID;
-    uint32_t time_stamp;
+    uint32_t time_stamp_pc; //收到的上一包的PC时间戳
+    uint32_t time_stamp_receive_micro; //收到的上一包时STM32的时间戳
+    uint32_t time_stamp_send_micro; //发送此包时STM32的时间戳
 
     float yaw, pitch,
         roll; //坐标系定义： +x:前，+y:左，+z：上，旋转角绕轴逆时针正，顺时针负，旋转顺序ZYX
@@ -46,7 +48,9 @@ struct ReceiveRobotData {
     void update_log() {
         using namespace web;
         write_log("robo", [&](auto& j) {
-            j["timestamp"] = val(time_stamp);
+            j["timestamp_pc"] = val(time_stamp_pc);
+            j["timestamp_receive_micro"] = val(time_stamp_receive_micro);
+            j["timestamp_send_micro"] = val(time_stamp_send_micro);
 
             j["yaw"] = val(yaw);
             j["pitch"] = val(pitch);
@@ -81,12 +85,12 @@ struct ReceiveSentryData {
     int cur_bullet;
     uint8_t center_state;
 
-    static std::optional<ReceiveSentryData> create(const uint8_t* data, std::size_t len) {
-        if (len != sizeof(ReceiveSentryData) || data[0] != ID)
+    static std::optional<ReceiveSentryData> create(const std::vector<uint8_t>& data) {
+        if (data.size() != sizeof(ReceiveSentryData) || data[0] != ID)
             return std::nullopt;
 
         ReceiveSentryData out;
-        std::memcpy(&out, data, sizeof(out));
+        std::memcpy(&out, data.data(), sizeof(out));
         return out;
     }
 

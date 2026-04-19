@@ -131,7 +131,7 @@ void draw_auto_aim(cv::Mat& img, const AutoAimDebugCtx& ctx) {
             const double v_pitch = cmd.v_pitch;
 
             const double dx = -scale * v_yaw;
-            const double dy = scale * v_pitch;
+            const double dy = -scale * v_pitch;
 
             const cv::Point2f start_pt = center;
             const cv::Point2f end_pt = start_pt + cv::Point2f(dx, dy);

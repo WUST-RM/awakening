@@ -602,7 +602,6 @@ struct VeryAimer::Impl {
                 target.get_target_state().get_armor_r(selected_armor, target.target_number);
             armors_xyza[selected_armor].x() = center_xy_dis * std::cos(center_yaw);
             armors_xyza[selected_armor].y() = center_xy_dis * std::sin(center_yaw);
-            armors_xyza[selected_armor].z() = target.get_target_state().pos().z();
         }
         return get_control_point(armors_xyza[selected_armor], bullet_speed, selected_armor);
     }
@@ -714,7 +713,8 @@ struct VeryAimer::Impl {
                 if (!hit_opt)
                     return false;
 
-                auto cp = select_and_get_control_point(hit_opt->hit_time_target, bullet_speed, fsm);
+                auto cp =
+                    select_and_get_control_point(hit_opt->hit_time_target, bullet_speed, fsm_mode);
                 if (!cp.valid)
                     return false;
 
@@ -734,8 +734,7 @@ struct VeryAimer::Impl {
                 int half = horizon / 2;
                 const int delay_steps = params_.control_delay * 2.0 / dt;
 
-                for (int i = (fsm != AutoAimFsm::AIM_WHOLE_CAR_CENTER ? half : delay_steps); i >= 1;
-                     --i) {
+                for (int i = half; i >= 1; --i) {
                     double t = -i * dt;
 
                     GimbalState gs;
@@ -794,19 +793,17 @@ struct VeryAimer::Impl {
 
             if (fsm == AutoAimFsm::AIM_WHOLE_CAR_CENTER) {
                 aim_traj_.clear();
+                aim_traj_.reserve(horizon + 1);
                 aim_center_target_traj_.clear();
 
                 aim_center_target_traj_.reserve(horizon + 1);
-                aim_traj_.reserve(horizon + 1);
 
                 aim_center_target_traj_cp0_ = select_and_get_control_point(
-                    target,
+                    hit_ctx.hit_time_target,
                     bullet_speed,
                     AutoAimFsm::AIM_WHOLE_CAR_ARMOR
                 );
-
-                const int delay_steps = params_.control_delay * 2.0 / dt;
-
+                // Trajectory<AimPoint, double> __aim_traj;
                 if (!build_traj(
                         aim_center_target_traj_,
                         aim_traj_,

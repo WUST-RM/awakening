@@ -23,7 +23,7 @@ static constexpr auto LOG_FOLDER_PATH_ARR = utils::concat(ROOT_DIR, "/log");
 static constexpr std::string_view LOG_FOLDER_PATH(LOG_FOLDER_PATH_ARR.data());
 static constexpr auto LOG_NAME = "awakening";
 static constexpr size_t MAX_LOG_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-static constexpr size_t FOLDER_WARN_SIZE = 500 * 1024 * 1024; // 500MB
+static constexpr size_t FOLDER_WARN_SIZE = 50 * 1024 * 1024; // 50MB
 
 #define AWAKENING_TRACE(...) ::awakening::logger::get_logger()->trace(__VA_ARGS__)
 #define AWAKENING_DEBUG(...) ::awakening::logger::get_logger()->debug(__VA_ARGS__)

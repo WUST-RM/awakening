@@ -1,41 +1,55 @@
-enemy_color: blue
-max_infer_num: 5
-bullet_speed: 23.0
+# 连接小电脑
+使用vscode的 Remote - SSH插件 
+哨兵： ssh nuc@192.168.10.51
+连接后进入主目录下的awakening，
+# 运行自瞄程序
+```
+sudo ./run.sh run [exe名] [使用config的绝对路径] 【是否开启debug模式？true:xxx】
+#eg：
+sudo ./run.sh run auto_aim /home/hy/awakening/config/sentry.yaml true
+```
+# 可视化：
+```
+python3 web.py 
+```
+浏览器进入： http://小电脑有线ip:8000
+# 调参
+```
+enemy_color: red #识别颜色，只有调试时使用，比赛使用裁判系统数据
+max_infer_num: 5 #最大识别并发数 一般不用改
+bullet_speed: 21.0 #弹丸初速度 只有调试时使用，需要得到电控设置，比赛使用裁判系统数据，该参数影响pitch的补偿，弹丸飞行预测时间
 
 serial:
-  enable: true
-  device_name: /dev/ttyACM0 
-  baud_rate: 115200
+  enable: true #是否开串口
+  device_name: /dev/ttyACM0 #挂载路径
+  baud_rate: 115200 #不用改
   char_size: 8
   read_buf_size: 4096
 
-use_sim: true
+use_sim: false #是否使用仿真
 
 recorder:
-  enable: false
+  enable: false #是否启用录制
 player:
-  enable: false
+  enable: false #是否使用回放数据
   path: /home/hy/awakening/record/auto_aim/2026-04-08_00-43-38.bin
 
-tf:
-  camera_in_gimbal:
-    t: [0.14,0.05,0.0]
+tf: #有ros2环境的可以开rviz看效果
+  camera_in_gimbal: #相机与云台旋旋转中心外参，影响去运动畸变精度，弹道补偿
+    t: [0.00,0.00,0.08]
+    R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0] 
+  shoot_in_gimbal: #测速枪口与云台旋转中心外参，这里只影响可视化的弹道重现
+    t: [0.1,0.0,0.0]
     R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
-  shoot_in_gimbal:
-    t: [0.2,0.0,0.0]
-    R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
-wheel_odometry:
-  q_xyz: [10.0,10.0,1.0]
-  r_vxyz: [0.05,0.05,0.05]
 
-bullet_pick_up:
+bullet_pick_up: #弹道重现参数，与very_aimer设置的一直即可
   ballistic_trajectory:
     gravity: 9.8
     resistance: 0.092
   
-auto_exposure:
+auto_exposure: #自动曝光
   enable: true
-  target_brightness: 35.0
+  target_brightness: 35.0 #目标平均亮度，10 - 50 一般不用调
   tolerance: 3.0
   step_gain: 15.0
   decay_step: 1.0
@@ -44,12 +58,12 @@ auto_exposure:
   control_interval_ms: 300
 
 
-armor_detector:
+armor_detector: #用车上原来的参数就行已经是最优解
   armor_infer:
     model_type: tup
     conf_threshold: 0.2
   net_detector:
-    backend: tensorrt
+    backend: openvino
     openvino:
       model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
       device_name: "GPU"
@@ -70,11 +84,9 @@ armor_detector:
     enable: true
     diff_threshold: 20.0
 
-armor_tracker:
-  lost_time_thres: 0.5
-  tracking_thres: 10
-  max_yaw_diff_deg: 60.0
-  max_dis_diff: 3.0
+armor_tracker: #跟踪参数，没有把握就不改
+  lost_time_thres: 0.5 
+  tracking_thres: 10 
   match_gate: 300.0
   match_gate_not_all_init: 3000.0
   qxyz_common: [20.0, 20.0, 1.0]
@@ -85,13 +97,13 @@ armor_tracker:
   q_l: 0.0000001
   q_h: 0.0000001
   q_outpost_dz: 0.5
-  r_uv: 30.0
+  r_uv: 50.0
   esekf_iter_num: 5
 
-auto_aim_fsm:
+auto_aim_fsm: #多种瞄准模式target vyaw控制阈值 single：目标速度小锁定较优板 whole： 锁定全部板 pair： 4选2 center：瞄准中心
   single_whole_up: 1.5 
   single_whole_down: 1.0
-  whole_pair_up: 16.5 
+  whole_pair_up: 6.5 
   whole_pair_down: 7.5 #1s内至少换2次板子  2pi  否则轨迹规划无意义
   pair_center_up: 16.5
   pair_center_down: 15.0
@@ -99,29 +111,29 @@ auto_aim_fsm:
 
 
 very_aimer:
-  base_yaw_offset: -1.0
-  base_pitch_offset: -3.0
+  base_yaw_offset: -0.5 # yaw补偿
+  base_pitch_offset: 2.0 # pitch补偿 两个都调好理论上发出弹丸会与可视化弹道重现重合，可以在没有靶车的时候临时调整
   # base_yaw_offset: -0.0
   # base_pitch_offset: -0.0
-  sample_total_time: 1.0
+  sample_total_time: 1.0 
   
   sample_horizon: 200
 
-  control_delay: 0.2
+  control_delay: 0.2 #发弹延迟 当前轨迹时间后发弹延迟如果最佳控制打不中则提前不开火，反之以最小允许误差尝试开火
   
-  max_yaw_acc: 40
+  max_yaw_acc: 40 
   #全向yaw加速度测算37
   max_pitch_acc: 50
   
 
-  prediction_delay: 0.00
+  prediction_delay: 0.00 #预测时间调整 可通过击打平移单装甲板靶调试出
   aim_center_more_prediction_time: 0.0
   comming_angle: 55
   leaving_angle: 20
 
-  yaw_limit_deg: 60
-  shooting_range_h: 0.12
-  shooting_range_w_small: 0.12
+
+  shooting_range_h: 0.12 #目标装甲板高 
+  shooting_range_w_small: 0.12 #宽 两个影响开火允许误差
   shooting_range_w_large: 0.24
   min_enable_pitch_deg: 0.25
   min_enable_yaw_deg: 0.25
@@ -133,7 +145,7 @@ very_aimer:
 
 camera: 
   hik_camera:
-    target_sn: DA3038891
+    target_sn: DA2166432 #sn码 不匹配的话看终端提示就是
     adc_bit_depth: Bits_8
     pixel_format: BayerRG8 #RGB8Packed
     reverse_x: false
@@ -143,7 +155,7 @@ camera:
     offset_x: 0
     offset_y: 0
     acquisition_frame_rate_enable: true
-    acquisition_frame_rate: 250
+    acquisition_frame_rate: 200
     exposure_time: 1500
     gain: 16.9
     gamma: 0.7 #Bayer用不了
@@ -152,7 +164,7 @@ camera:
     trigger_activation: ""
     format: "bgr" 
     use_cuda_cvt: true
-  camera_info:
+  camera_info: #相机内参，根据相机焦距选择以下预设或者自己标定
     #8mm
     # image_width: 1440
     # image_height: 1080
@@ -235,3 +247,5 @@ camera:
     #   data: [3659.22949,    0.     ,  748.71496,    0.     ,
     #             0.     , 3652.02661,  556.81908,    0.     ,
     #             0.     ,    0.     ,    1.     ,    0.     ]
+
+```

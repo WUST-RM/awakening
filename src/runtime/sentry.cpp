@@ -1,5 +1,5 @@
+#include "angles.h"
 #include "ascii_banner.hpp"
-#include "tasks/auto_aim/armor_tracker/motion_model_point.hpp"
 #include "tasks/base/ballistic_trajectory.hpp"
 #include "tasks/base/wheel_odometry.hpp"
 #include <chrono>
@@ -46,13 +46,13 @@ static backward::SignalHandling sh;
 }
 using namespace awakening;
 
-enum class SimpleFrame : int { ODOM, GIMBAL_ODOM, GIMBAL, CAMERA, CAMERA_CV, SHOOT, N };
+enum class SimpleFrame : int { ODOM, GIMBAL_ODOM, GIMBAL, CAMERA, CAMERA_CV, SHOOT, BIG_YAW, N };
 
 using SimpleRobotTF = utils::tf::RobotTF<SimpleFrame, static_cast<size_t>(SimpleFrame::N), false>;
 
 std::string SimpleFrame_to_str(int frame) {
-    constexpr const char* details[] = { "odom",   "gimbal_odom", "gimbal",
-                                        "camera", "camera_cv",   "shoot" };
+    constexpr const char* details[] = { "odom",      "gimbal_odom", "gimbal", "camera",
+                                        "camera_cv", "shoot",       "big_yaw" };
     return std::string(details[frame]);
 }
 std::string SimpleFrame_to_str(SimpleFrame frame) {
@@ -231,6 +231,7 @@ int main(int argc, char** argv) {
         tf->add_edge(SimpleFrame::GIMBAL, SimpleFrame::CAMERA);
         tf->add_edge(SimpleFrame::GIMBAL, SimpleFrame::SHOOT);
         tf->add_edge(SimpleFrame::CAMERA, SimpleFrame::CAMERA_CV);
+        tf->add_edge(SimpleFrame::GIMBAL_ODOM, SimpleFrame::BIG_YAW);
         ISO3 cv_in_camera = ISO3::Identity();
         cv_in_camera.translation() = Vec3(0, 0, 0);
         cv_in_camera.linear() = R_CV2PHYSICS;
@@ -362,8 +363,9 @@ int main(int argc, char** argv) {
                     std::chrono::milliseconds(10)
                 );
             }
-            auto robo_opt = ReceiveRobotData::create(data);
             log_ctx.serial_count++;
+            auto robo_opt = ReceiveRobotData::create(data);
+
             if (robo_opt.has_value()) {
                 auto robo = robo_opt.value();
                 uint32_t t_micro = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -419,6 +421,27 @@ int main(int argc, char** argv) {
                     bullet_pick_up.push_back(std::move(b));
                 }
                 last_bullet_count = robo.bullet_count;
+            }
+            auto sentry_opt = ReceiveSentryData::create(data);
+            if (sentry_opt.has_value()) {
+                auto sentry = sentry_opt.value();
+                sentry.update_log();
+                double big_yaw_in_world = sentry.big_yaw_in_world;
+                auto gimbal_2_gimbal_odom =
+                    tf->pose_a_in_b(SimpleFrame::GIMBAL, SimpleFrame::GIMBAL_ODOM, Clock::now());
+                auto ypr =
+                    utils::matrix2euler(gimbal_2_gimbal_odom.linear(), utils::EulerOrder::ZYX);
+                ypr[0] = angles::from_degrees(big_yaw_in_world);
+                ypr[1] = 0.0;
+                ISO3 big_yaw_2_gimbal_odom = ISO3::Identity();
+                big_yaw_2_gimbal_odom.translation() = Vec3(0, 0, -0.1);
+                big_yaw_2_gimbal_odom.linear() = utils::euler2matrix(ypr, utils::EulerOrder::ZYX);
+                tf->push(
+                    SimpleFrame::GIMBAL_ODOM,
+                    SimpleFrame::BIG_YAW,
+                    Clock::now(),
+                    big_yaw_2_gimbal_odom
+                );
             }
         });
     }
@@ -678,6 +701,29 @@ int main(int argc, char** argv) {
         });
 #endif
     }
+    auto cmd_sub = rcl_node.make_sub<geometry_msgs::msg::Twist>(
+        "cmd_vel",
+        rclcpp::QoS(10),
+        [&](const geometry_msgs::msg::Twist::SharedPtr msg) {
+            SendNavCmdData send;
+
+            send.cmd_ID = SendNavCmdData::ID;
+            static auto start = std::chrono::steady_clock::now();
+
+            uint32_t t = std::chrono::duration_cast<std::chrono::microseconds>(
+                             std::chrono::steady_clock::now() - start
+            )
+                             .count();
+            send.time_stamp = t;
+            send.vx = msg->linear.x;
+            send.vy = msg->linear.y;
+            send.wz = msg->angular.z;
+            if (serial) {
+                serial->write(utils::to_vector(send));
+            }
+        }
+    );
+    rcl_node.push_sub(cmd_sub);
 
     if (player) {
         auto cam = s.register_source<CameraIO>("hik");

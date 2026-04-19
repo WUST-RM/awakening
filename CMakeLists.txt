@@ -155,6 +155,7 @@ target_link_libraries(auto_aim
 
 if(ROS2_FULL_FOUND)
 add_common_executable(nav src/runtime/nav.cpp)
+add_common_executable(sentry src/runtime/sentry.cpp)
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_rcl
 )
@@ -162,5 +163,9 @@ target_link_libraries(nav
     ${PROJECT_NAME}_rcl
     ${PROJECT_NAME}_utils
 )
-
+target_link_libraries(sentry
+    ${PROJECT_NAME}_rcl
+    ${PROJECT_NAME}_utils
+    ${PROJECT_NAME}_auto_aim
+)
 endif()

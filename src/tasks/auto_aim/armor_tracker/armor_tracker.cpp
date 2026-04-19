@@ -28,10 +28,6 @@ struct ArmorTracker::Impl {
         last_track = armors.timestamp;
         lost_thres_ = std::abs(static_cast<int>(cfg_.lost_time_thres / dt));
         auto process = [&](int idx) {
-            // std::vector<ArmorClass> ignore = {};
-            // if (idx == pre_target_idx_) {
-            //     ignore.push_back(target_buf_[cur_target_idx_].target_number);
-            // }
             auto& t = target_buf_[idx];
             bool found = (t.track_state.tracker_state == ArmorTarget::TrackState::LOST)
                 ? init_target(t, armors, frame_id, camera_info, camera_cv_in_odom)
@@ -76,9 +72,13 @@ struct ArmorTracker::Impl {
         Armor init_target;
         for (auto& a: armors.armors) {
             if (!(a.color == ArmorColor::NONE || a.color == ArmorColor::PURPLE) && !found) {
-                init_target = a;
-                found = true;
-                continue;
+                if (!(target_buf_[cur_target_idx_].target_number == ArmorClass::OUTPOST
+                      && a.number != ArmorClass::OUTPOST))
+                {
+                    init_target = a;
+                    found = true;
+                    break;
+                }
             }
         }
         if (!found) {

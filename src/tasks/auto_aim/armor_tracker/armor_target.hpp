@@ -15,8 +15,6 @@ struct ArmorTrackerCfg {
     int esekf_iter_num;
     double lost_time_thres;
     int tracking_thres;
-    double max_yaw_diff_deg;
-    double max_dis_diff;
     double match_gate;
     double match_gate_not_all_init;
     double qyaw_common;
@@ -32,8 +30,6 @@ struct ArmorTrackerCfg {
         esekf_iter_num = config["esekf_iter_num"].as<int>();
         lost_time_thres = config["lost_time_thres"].as<double>();
         tracking_thres = config["tracking_thres"].as<int>();
-        max_yaw_diff_deg = config["max_yaw_diff_deg"].as<double>();
-        max_dis_diff = config["max_dis_diff"].as<double>();
         match_gate = config["match_gate"].as<double>();
         match_gate_not_all_init = config["match_gate_not_all_init"].as<double>();
         qyaw_common = config["qyaw_common"].as<double>();
