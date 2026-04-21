@@ -1,6 +1,8 @@
 #pragma once
 
 #include "tasks/base/web.hpp"
+#include "utils/common/type_common.hpp"
+#include "utils/utils.hpp"
 #include <chrono>
 #include <cstdint>
 #include <cstring>
@@ -8,6 +10,7 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <utility>
 #include <vector>
 #include <wust_vl/common/drivers/serial_driver.hpp>
 
@@ -139,5 +142,30 @@ struct SendNavCmdData {
     float vx, vy, wz;
 
 } __attribute__((packed));
+// inline Vec2 compensateRoll(
+//     double target_yaw,
+//     double target_pitch,
+//     double roll
+// ) {
+//     // 1. 目标方向
+//     Vec3 dir;
+//     dir.x() = std::cos(target_pitch) * std::cos(target_yaw);
+//     dir.y() = std::cos(target_pitch) * std::sin(target_yaw);
+//     dir.z() = std::sin(target_pitch);
 
+//     // 2. 去掉 roll（绕 x 轴）
+//     double cr = std::cos(roll);
+//     double sr = std::sin(roll);
+
+//     Vec3 d;
+//     d.x() = dir.x();
+//     d.y() =  cr * dir.y() + sr * dir.z();
+//     d.z() = -sr * dir.y() + cr * dir.z();
+
+//     // 3. 转回 yaw / pitch
+//     double yaw = std::atan2(d.y(), d.x());
+//     double pitch = std::atan2(d.z(), std::hypot(d.x(), d.y()));
+
+//     return {yaw, pitch};
+// }
 } // namespace awakening

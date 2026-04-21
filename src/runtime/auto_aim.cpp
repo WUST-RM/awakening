@@ -2,6 +2,7 @@
 #include "tasks/auto_aim/armor_tracker/motion_model_point.hpp"
 #include "tasks/base/ballistic_trajectory.hpp"
 #include "tasks/base/wheel_odometry.hpp"
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <memory>
@@ -370,15 +371,28 @@ int main(int argc, char** argv) {
                                        std::chrono::steady_clock::now() - start_tp
                 )
                                        .count();
+                static uint32_t last_pc_send = 0;
+                static utils::MovingAverage<uint32_t, 1000> avg;
+                uint32_t delay_micro = 0;
+                auto compute_delay = [&](uint32_t pc_send, uint32_t stm_recv, uint32_t stm_send
+                                     ) -> uint32_t {
+                    int64_t raw = (int64_t)t_micro - (int64_t)pc_send
+                        - ((int64_t)stm_send - (int64_t)stm_recv);
+                    return static_cast<uint32_t>(raw / 2);
+                };
+
                 uint32_t pc_send_micro = robo.time_stamp_pc;
-                static uint32_t last_pc_send = -1;
-                static uint32_t delay_micro = 0;
+
                 if (pc_send_micro != last_pc_send) {
-                    uint32_t stm_receive_micro = robo.time_stamp_receive_micro;
-                    uint32_t stm_send_micro = robo.time_stamp_send_micro;
                     last_pc_send = pc_send_micro;
-                    delay_micro =
-                        (t_micro - pc_send_micro - (stm_send_micro - stm_receive_micro)) * 0.5;
+
+                    uint32_t new_delay = compute_delay(
+                        pc_send_micro,
+                        robo.time_stamp_receive_micro,
+                        robo.time_stamp_send_micro
+                    );
+
+                    delay_micro = avg.update(new_delay);
                 }
                 std::chrono::time_point<std::chrono::steady_clock> packet_time =
                     std::chrono::steady_clock::now() - std::chrono::microseconds(delay_micro);

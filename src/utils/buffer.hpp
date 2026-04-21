@@ -261,4 +261,25 @@ private:
     mutable std::mutex mtx_;
     T value_ {};
 };
+template<typename T, int N>
+class MovingAverage {
+public:
+    T update(T value) {
+        sum_ += value - buffer_[idx_];
+        buffer_[idx_] = value;
+
+        idx_ = (idx_ + 1) % N;
+        if (count_ < N)
+            ++count_;
+
+        return static_cast<T>(sum_ / count_);
+    }
+
+private:
+    std::array<T, N> buffer_ {};
+    uint64_t sum_ = 0; // 防溢出
+
+    int idx_ = 0;
+    int count_ = 0;
+};
 } // namespace awakening::utils

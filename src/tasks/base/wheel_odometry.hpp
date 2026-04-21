@@ -106,6 +106,9 @@ public:
     } params_;
     WheelOdometry(const YAML::Node& config, const TimePoint& t) {
         params_.load(config);
+        reset(t);
+    }
+    void reset(const TimePoint& t) {
         Eigen::DiagonalMatrix<double, wheel_motion_model::X_N> p0;
         p0.diagonal() << 1, 64, 1, 64, 1, 64;
         const auto u_q = [this]() {
@@ -208,26 +211,28 @@ public:
         });
         wheel_motion_model::Measure measure;
         wheel_motion_model::VecZ z;
-        z<<v.x(),v.y(),v.z();
+        z << v.x(), v.y(), v.z();
         esekf.value().setMeasureFunc(measure);
         state.x = esekf.value().update(z);
+
         last_update = t;
         state.timestamp = t;
+        if (state.vel().norm() > 10.0) {
+            reset(t);
+        }
     }
     void write_log() {
         web::write_log("wheel_odometry", [&](auto& j) {
             j["timestamp"] = static_cast<int>(
                 std::chrono::duration<double>(last_update.time_since_epoch()).count()
             );
-            
-           
+
             j["x"] = web::val(state.pos().x());
             j["y"] = web::val(state.pos().y());
             j["z"] = web::val(state.pos().z());
             j["vx"] = web::val(state.vel().x());
             j["vy"] = web::val(state.vel().y());
             j["vz"] = web::val(state.vel().z());
-
         });
     }
     TimePoint last_update;
