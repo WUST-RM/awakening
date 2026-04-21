@@ -130,6 +130,7 @@ public:
     TimePoint last_update;
     ArmorClass target_number = ArmorClass::UNKNOWN;
     int this_id = -1;
+    int update_count = 0;
     [[nodiscard]] inline ArmorTarget fast_copy_without_ekf() const noexcept {
         ArmorTarget target;
         target.target_number = this->target_number;
@@ -142,6 +143,7 @@ public:
         target.last_match_id = this->last_match_id;
         target.outpost_has_all_and_has_set_ids = this->outpost_has_all_and_has_set_ids;
         target.this_id = this->this_id;
+        target.update_count = this->update_count;
         return target;
     }
     [[nodiscard]] inline bool check() const noexcept {

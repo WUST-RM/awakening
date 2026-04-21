@@ -110,6 +110,7 @@ void ArmorTarget::reset(
     }
     track_state.reset();
     this_id = GOBAL_ID++;
+    update_count++;
 }
 
 void ArmorTarget::armor_pnp(Armor& a, const CameraInfo& camera_info, const ISO3& camera_cv_in_odom)
@@ -310,6 +311,7 @@ bool ArmorTarget::update(
     target_state.timestamp = timestamp;
     last_update = timestamp;
     this_id = GOBAL_ID++;
+    update_count++;
     return true;
 }
 std::vector<std::pair<int, Armor>> ArmorTarget::match(

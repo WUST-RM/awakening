@@ -42,7 +42,7 @@ struct ArmorTracker::Impl {
         process(cur_target_idx_);
         auto& cur = target_buf_[cur_target_idx_];
         auto& pre = target_buf_[pre_target_idx_];
-        // if (target_buf_[cur_target_idx_].target_number != ArmorClass::OUTPOST) {
+
         if (cur.track_state.tracker_state == ArmorTarget::TrackState::TEMP_LOST) {
             process(pre_target_idx_);
 
@@ -53,7 +53,6 @@ struct ArmorTracker::Impl {
         } else if (cur.track_state.tracker_state == ArmorTarget::TrackState::TRACKING) {
             pre.track_state.tracker_state = ArmorTarget::TrackState::LOST;
         }
-        // }
 
         return target_buf_[cur_target_idx_].fast_copy_without_ekf();
     }

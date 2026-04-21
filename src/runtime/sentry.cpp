@@ -1,5 +1,6 @@
 #include "angles.h"
 #include "ascii_banner.hpp"
+#include "tasks/auto_aim/armor_omni.hpp"
 #include "tasks/base/ballistic_trajectory.hpp"
 #include "tasks/base/wheel_odometry.hpp"
 #include <chrono>
@@ -46,17 +47,31 @@ static backward::SignalHandling sh;
 }
 using namespace awakening;
 
-enum class SimpleFrame : int { ODOM, GIMBAL_ODOM, GIMBAL, CAMERA, CAMERA_CV, SHOOT, BIG_YAW, N };
+enum class SentryFrame : int {
+    ODOM,
+    GIMBAL_ODOM,
+    GIMBAL,
+    CAMERA,
+    CAMERA_CV,
+    SHOOT,
+    BIG_YAW,
+    OMNI_0,
+    OMNI_0_CV,
+    OMNI_1,
+    OMNI_1_CV,
+    N
+};
 
-using SimpleRobotTF = utils::tf::RobotTF<SimpleFrame, static_cast<size_t>(SimpleFrame::N), false>;
+using SimpleRobotTF = utils::tf::RobotTF<SentryFrame, static_cast<size_t>(SentryFrame::N), false>;
 
-std::string SimpleFrame_to_str(int frame) {
-    constexpr const char* details[] = { "odom",      "gimbal_odom", "gimbal", "camera",
-                                        "camera_cv", "shoot",       "big_yaw" };
+std::string SentryFrame_to_str(int frame) {
+    constexpr const char* details[] = { "odom",      "gimbal_odom", "gimbal",   "camera",
+                                        "camera_cv", "shoot",       "big_yaw",  "omni_0",
+                                        "omni_0_cv", "omni_1",      "omni_1_cv" };
     return std::string(details[frame]);
 }
-std::string SimpleFrame_to_str(SimpleFrame frame) {
-    return SimpleFrame_to_str(std::to_underlying(frame));
+std::string SentryFrame_to_str(SentryFrame frame) {
+    return SentryFrame_to_str(std::to_underlying(frame));
 }
 struct CameraTag {};
 struct SerialTag {};
@@ -99,6 +114,8 @@ struct LogCtx {
     int serial_count = 0;
     int found_count = 0;
     double latency_ms_total = 0.0;
+    int omni_count = 0;
+    double omni_latency_ms_total = 0.0;
     void reset() {
         camera_count = 0;
         detect_count = 0;
@@ -107,6 +124,8 @@ struct LogCtx {
         serial_count = 0;
         found_count = 0;
         latency_ms_total = 0.0;
+        omni_count = 0;
+        omni_latency_ms_total = 0.0;
     }
 };
 static constexpr auto RECORD_FOLDER_PATH_ARR = utils::concat(ROOT_DIR, "/record/auto_aim");
@@ -213,9 +232,21 @@ int main(int argc, char** argv) {
     auto_aim::ArmorDetector armor_detector(config["armor_detector"]);
     auto_aim::ArmorTracker armor_tracker(config["armor_tracker"]);
     auto_aim::AutoAimFsmController auto_aim_fsm_controller(config["auto_aim_fsm"]);
+    auto_aim::ArmorOmni armor_omni(config["armor_omni"]);
     auto_aim::VeryAimer very_aimer(config["very_aimer"]);
     utils::OrderedQueue<auto_aim::Armors> armors_queue;
     utils::SWMR<auto_aim::ArmorTarget> armor_target;
+    utils::SWMR<auto_aim::ArmorTarget> omni_armor_target;
+    armor_omni.emplace_one(
+        config["armor_omni"]["camera0"],
+        std::to_underlying(SentryFrame::OMNI_0),
+        std::to_underlying(SentryFrame::OMNI_0_CV)
+    );
+    armor_omni.emplace_one(
+        config["armor_omni"]["camera1"],
+        std::to_underlying(SentryFrame::OMNI_1),
+        std::to_underlying(SentryFrame::OMNI_1_CV)
+    );
     BulletPickUp bullet_pick_up(config["bullet_pick_up"]);
     LogCtx log_ctx;
     std::optional<auto_aim::AutoAimDebugCtx> auto_aim_dbg;
@@ -226,20 +257,30 @@ int main(int argc, char** argv) {
     WheelOdometry wheel_odometry(config["wheel_odometry"], Clock::now());
     auto tf = SimpleRobotTF::create();
     {
-        tf->add_edge(SimpleFrame::ODOM, SimpleFrame::GIMBAL_ODOM);
-        tf->add_edge(SimpleFrame::GIMBAL_ODOM, SimpleFrame::GIMBAL);
-        tf->add_edge(SimpleFrame::GIMBAL, SimpleFrame::CAMERA);
-        tf->add_edge(SimpleFrame::GIMBAL, SimpleFrame::SHOOT);
-        tf->add_edge(SimpleFrame::CAMERA, SimpleFrame::CAMERA_CV);
-        tf->add_edge(SimpleFrame::GIMBAL_ODOM, SimpleFrame::BIG_YAW);
+        tf->add_edge(SentryFrame::ODOM, SentryFrame::GIMBAL_ODOM);
+        tf->add_edge(SentryFrame::GIMBAL_ODOM, SentryFrame::GIMBAL);
+        tf->add_edge(SentryFrame::GIMBAL, SentryFrame::CAMERA);
+        tf->add_edge(SentryFrame::GIMBAL, SentryFrame::SHOOT);
+        tf->add_edge(SentryFrame::CAMERA, SentryFrame::CAMERA_CV);
+        tf->add_edge(SentryFrame::GIMBAL_ODOM, SentryFrame::BIG_YAW);
+        tf->add_edge(SentryFrame::BIG_YAW, SentryFrame::OMNI_0);
+        tf->add_edge(SentryFrame::OMNI_0, SentryFrame::OMNI_0_CV);
+        tf->add_edge(SentryFrame::BIG_YAW, SentryFrame::OMNI_1);
+        tf->add_edge(SentryFrame::OMNI_1, SentryFrame::OMNI_1_CV);
         ISO3 cv_in_camera = ISO3::Identity();
         cv_in_camera.translation() = Vec3(0, 0, 0);
         cv_in_camera.linear() = R_CV2PHYSICS;
-        tf->push(SimpleFrame::CAMERA, SimpleFrame::CAMERA_CV, Clock::now(), cv_in_camera);
+        tf->push(SentryFrame::CAMERA, SentryFrame::CAMERA_CV, Clock::now(), cv_in_camera);
         ISO3 camera_in_gimbal = utils::load_isometry3(config["tf"]["camera_in_gimbal"]);
-        tf->push(SimpleFrame::GIMBAL, SimpleFrame::CAMERA, Clock::now(), camera_in_gimbal);
+        tf->push(SentryFrame::GIMBAL, SentryFrame::CAMERA, Clock::now(), camera_in_gimbal);
         ISO3 shoot_in_gimbal = utils::load_isometry3(config["tf"]["shoot_in_gimbal"]);
-        tf->push(SimpleFrame::GIMBAL, SimpleFrame::SHOOT, Clock::now(), shoot_in_gimbal);
+        tf->push(SentryFrame::GIMBAL, SentryFrame::SHOOT, Clock::now(), shoot_in_gimbal);
+        ISO3 omin_0_in_big_yaw = utils::load_isometry3(config["tf"]["omin_0_in_big_yaw"]);
+        tf->push(SentryFrame::BIG_YAW, SentryFrame::OMNI_0, Clock::now(), omin_0_in_big_yaw);
+        ISO3 omin_1_in_big_yaw = utils::load_isometry3(config["tf"]["omin_1_in_big_yaw"]);
+        tf->push(SentryFrame::BIG_YAW, SentryFrame::OMNI_1, Clock::now(), omin_1_in_big_yaw);
+        tf->push(SentryFrame::OMNI_0, SentryFrame::OMNI_0_CV, Clock::now(), cv_in_camera);
+        tf->push(SentryFrame::OMNI_1, SentryFrame::OMNI_1_CV, Clock::now(), cv_in_camera);
     }
 #ifdef USE_ROS2
     if (use_sim) {
@@ -306,8 +347,8 @@ int main(int argc, char** argv) {
                     gimbal_in_gimbal_odom.translation() = Vec3(0, 0, 0);
                     gimbal_in_gimbal_odom.linear() = __tf->linear();
                     tf->push(
-                        SimpleFrame::GIMBAL_ODOM,
-                        SimpleFrame::GIMBAL,
+                        SentryFrame::GIMBAL_ODOM,
+                        SentryFrame::GIMBAL,
                         rcl_node.form_ros_time(ros_now),
                         gimbal_in_gimbal_odom.inverse()
                     );
@@ -328,15 +369,15 @@ int main(int argc, char** argv) {
         CommonFrame frame {
             .img_frame = std::move(f),
             .id = current_id++,
-            .frame_id = std::to_underlying(SimpleFrame::CAMERA_CV),
+            .frame_id = std::to_underlying(SentryFrame::CAMERA_CV),
             .expanded = cv::Rect(0, 0, frame.img_frame.src_img.cols, frame.img_frame.src_img.rows),
             .offset = cv::Point2f(0, 0),
         };
         auto target = armor_target.read();
         if (target.check()) {
             auto camera_cv_in_old = tf->pose_a_in_b(
-                SimpleFrame(frame.frame_id),
-                SimpleFrame(target.get_target_state().frame_id),
+                SentryFrame(frame.frame_id),
+                SentryFrame(target.get_target_state().frame_id),
                 frame.img_frame.timestamp
             );
             target.set_target_state([&](armor_point_motion_model::State& state) {
@@ -405,8 +446,8 @@ int main(int argc, char** argv) {
                 gimbal_2_gimbal_odom.linear() =
                     utils::euler2matrix(Vec3(yaw, pitch, roll), utils::EulerOrder::ZYX);
                 tf->push(
-                    SimpleFrame::GIMBAL_ODOM,
-                    SimpleFrame::GIMBAL,
+                    SentryFrame::GIMBAL_ODOM,
+                    SentryFrame::GIMBAL,
                     packet_time,
                     gimbal_2_gimbal_odom
                 );
@@ -418,8 +459,8 @@ int main(int argc, char** argv) {
                 ISO3 gimbal_odom_in_odom = ISO3::Identity();
                 gimbal_odom_in_odom.translation() = wheel_odometry.state.pos();
                 tf->push(
-                    SimpleFrame::ODOM,
-                    SimpleFrame::GIMBAL_ODOM,
+                    SentryFrame::ODOM,
+                    SentryFrame::GIMBAL_ODOM,
                     packet_time,
                     gimbal_odom_in_odom
                 );
@@ -427,7 +468,7 @@ int main(int argc, char** argv) {
                 static uint32_t last_bullet_count = 0;
                 if (robo.bullet_count > last_bullet_count) {
                     auto shoot_in_odom =
-                        tf->pose_a_in_b(SimpleFrame::SHOOT, SimpleFrame::ODOM, Clock::now());
+                        tf->pose_a_in_b(SentryFrame::SHOOT, SentryFrame::ODOM, Clock::now());
                     Bullet b { .fire_time = Clock::now(),
                                .fire_time_shoot_in_odom = shoot_in_odom,
                                .speed_in_odom = bullet_speed };
@@ -441,7 +482,7 @@ int main(int argc, char** argv) {
                 sentry.update_log();
                 double big_yaw_in_world = sentry.big_yaw_in_world;
                 auto gimbal_2_gimbal_odom =
-                    tf->pose_a_in_b(SimpleFrame::GIMBAL, SimpleFrame::GIMBAL_ODOM, Clock::now());
+                    tf->pose_a_in_b(SentryFrame::GIMBAL, SentryFrame::GIMBAL_ODOM, Clock::now());
                 auto ypr =
                     utils::matrix2euler(gimbal_2_gimbal_odom.linear(), utils::EulerOrder::ZYX);
                 ypr[0] = angles::from_degrees(big_yaw_in_world);
@@ -450,8 +491,8 @@ int main(int argc, char** argv) {
                 big_yaw_2_gimbal_odom.translation() = Vec3(0, 0, -0.1);
                 big_yaw_2_gimbal_odom.linear() = utils::euler2matrix(ypr, utils::EulerOrder::ZYX);
                 tf->push(
-                    SimpleFrame::GIMBAL_ODOM,
-                    SimpleFrame::BIG_YAW,
+                    SentryFrame::GIMBAL_ODOM,
+                    SentryFrame::BIG_YAW,
                     Clock::now(),
                     big_yaw_2_gimbal_odom
                 );
@@ -556,8 +597,8 @@ int main(int argc, char** argv) {
                 armors.armors.push_back(a);
             }
             auto camera_cv_in_odom =
-                tf->pose_a_in_b(SimpleFrame(armors.frame_id), SimpleFrame::ODOM, armors.timestamp);
-            armors.frame_id = std::to_underlying(SimpleFrame::ODOM);
+                tf->pose_a_in_b(SentryFrame(armors.frame_id), SentryFrame::ODOM, armors.timestamp);
+            armors.frame_id = std::to_underlying(SentryFrame::ODOM);
             auto __armor_target =
                 armor_tracker.track(armors, camera_info, camera_cv_in_odom, armors.frame_id);
             auto_aim_fsm_controller.update(
@@ -576,10 +617,10 @@ int main(int argc, char** argv) {
             if (auto_aim_dbg) {
                 auto_aim_dbg->armors.set(armors);
 #ifdef USE_ROS2
-                rcl::pub_armor_marker(rcl_node, SimpleFrame_to_str(armors.frame_id), armors);
+                rcl::pub_armor_marker(rcl_node, SentryFrame_to_str(armors.frame_id), armors);
                 rcl::pub_armor_target_marker(
                     rcl_node,
-                    SimpleFrame_to_str(__armor_target.get_target_state().frame_id),
+                    SentryFrame_to_str(__armor_target.get_target_state().frame_id),
                     __armor_target
                 );
 #endif
@@ -590,12 +631,16 @@ int main(int argc, char** argv) {
     });
     s.add_rate_source<>("solver", 1000.0, [&]() {
         log_ctx.solve_count++;
-        auto target = armor_target.read(); //需要转为相对gimbal_odom
+        auto_aim::ArmorTarget target;
+        target = armor_target.read();
+        if (!target.check()) {
+            target = omni_armor_target.read();
+        }
         int old_this_id = target.this_id;
-        auto gimbal_odom_state_in_odom = wheel_odometry.state;
+        auto gimbal_odom_state_in_odom = wheel_odometry.state; //转为相对gimbal_odom
         gimbal_odom_state_in_odom.predict(Clock::now());
         target.set_target_state([&](auto& s) {
-            s.frame_id = std::to_underlying(SimpleFrame::GIMBAL_ODOM);
+            s.frame_id = std::to_underlying(SentryFrame::GIMBAL_ODOM);
             s.x[armor_point_motion_model::idx::CX] -= gimbal_odom_state_in_odom.pos().x();
             s.x[armor_point_motion_model::idx::CY] -= gimbal_odom_state_in_odom.pos().y();
             s.x[armor_point_motion_model::idx::CZ] -= gimbal_odom_state_in_odom.pos().z();
@@ -635,26 +680,84 @@ int main(int argc, char** argv) {
             serial->write(std::move(utils::to_vector(send)));
         }
         auto old_in_camera_cv = tf->pose_a_in_b(
-            SimpleFrame(cmd.aim_point.frame_id),
-            SimpleFrame::CAMERA_CV,
+            SentryFrame(cmd.aim_point.frame_id),
+            SentryFrame::CAMERA_CV,
             cmd.timestamp
         );
-        cmd.aim_point.transform(old_in_camera_cv, std::to_underlying(SimpleFrame::CAMERA_CV));
+        cmd.aim_point.transform(old_in_camera_cv, std::to_underlying(SentryFrame::CAMERA_CV));
         if (auto_aim_dbg && is_web_running()) {
             auto_aim_dbg->gimbal_cmd.set(cmd);
         }
     });
+    s.add_rate_source<>("armor_omni", armor_omni.fps_, [&]() {
+        auto main_target = armor_target.read();
+        if (main_target.check()) {
+            return;
+        }
+        auto_aim::ArmorOmni::One& one = armor_omni.get_next();
+        auto img_frame = one.camera->read();
+        if (img_frame.src_img.empty()) {
+            AWAKENING_WARN("Failed to read image from camera.");
+            return;
+        }
+        CommonFrame common_frame;
+        common_frame.expanded = cv::Rect(0, 0, img_frame.src_img.cols, img_frame.src_img.rows);
+        common_frame.offset = cv::Point2f(0, 0);
+        common_frame.img_frame = std::move(img_frame);
+        common_frame.frame_id = one.cv_frame_id;
+        auto_aim::Armors armors { .timestamp = common_frame.img_frame.timestamp,
+                                  .id = common_frame.frame_id,
+                                  .frame_id = common_frame.frame_id };
+        auto tmp_armors = armor_omni.detector_->detect(common_frame);
+        for (auto& a: tmp_armors) {
+            if ((enemy_color == EnemyColor::BLUE && a.color == auto_aim::ArmorColor::RED)
+                || (enemy_color == EnemyColor::RED && a.color == auto_aim::ArmorColor::BLUE))
+            {
+                continue;
+            }
+            armors.armors.push_back(a);
+        }
+        auto camera_cv_in_odom =
+            tf->pose_a_in_b(SentryFrame(armors.frame_id), SentryFrame::ODOM, armors.timestamp);
+        armors.frame_id = std::to_underlying(SentryFrame::ODOM);
+        one.target = armor_tracker.track(armors, camera_info, camera_cv_in_odom, armors.frame_id);
+        if (!one.target.check()) {
+            one.target.update_count = 0;
+        }
+        one.total_score = one.target.update_count;
+        auto best_target = armor_omni.update();
+        omni_armor_target.write(best_target);
+        auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now() - armors.timestamp
+        )
+                              .count();
+        log_ctx.omni_count++;
+        log_ctx.latency_ms_total += latency_ms;
+        if (auto_aim_dbg) {
+#ifdef USE_ROS2
+            rcl::pub_armor_marker(rcl_node, SentryFrame_to_str(armors.frame_id), armors);
+            rcl::pub_armor_target_marker(
+                rcl_node,
+                SentryFrame_to_str(best_target.get_target_state().frame_id),
+                best_target
+            );
+#endif
+        }
+    });
     s.add_rate_source<>("logger", 1.0, [&]() {
         double avg_latency_ms = log_ctx.latency_ms_total / log_ctx.track_count;
+        double omni_avg_latency_ms = log_ctx.latency_ms_total / log_ctx.omni_count;
         AWAKENING_INFO(
-            "detect: {} track: {} found: {} solve: {} serial: {} camera: {} avg_latency: {:.3} ms",
+            "detect: {} track: {} found: {} solve: {} serial: {} camera: {} avg_latency: {:.3} ms omni: {} avg_latency: {:.3} ms",
             log_ctx.detect_count,
             log_ctx.track_count,
             log_ctx.found_count,
             log_ctx.solve_count,
             log_ctx.serial_count,
             log_ctx.camera_count,
-            avg_latency_ms
+            avg_latency_ms,
+            log_ctx.omni_count,
+            omni_avg_latency_ms
         );
         if (auto_aim_dbg) {
             auto_aim_dbg->avg_latency_ms.set(avg_latency_ms);
@@ -673,7 +776,7 @@ int main(int argc, char** argv) {
             auto_aim_dbg->armor_target.set(target);
             auto_aim_dbg->fsm_state.set(auto_aim_fsm_controller.get_state());
             auto gimbal_in_gimbal_odom =
-                tf->pose_a_in_b(SimpleFrame::GIMBAL, SimpleFrame::GIMBAL_ODOM, Clock::now());
+                tf->pose_a_in_b(SentryFrame::GIMBAL, SentryFrame::GIMBAL_ODOM, Clock::now());
             auto euler =
                 utils::matrix2euler(gimbal_in_gimbal_odom.linear(), utils::EulerOrder::ZYX);
             auto gimbal_yaw_pitch =
@@ -688,7 +791,7 @@ int main(int argc, char** argv) {
             auto bullet_poss =
                 bullet_pick_up.get_bullet_positions(img_now, very_aimer.get_yaw_pitch_offset());
             auto odom_in_camera_cv =
-                tf->pose_a_in_b(SimpleFrame::ODOM, SimpleFrame::CAMERA_CV, img_now);
+                tf->pose_a_in_b(SentryFrame::ODOM, SentryFrame::CAMERA_CV, img_now);
             for (auto& pos: bullet_poss) {
                 pos = odom_in_camera_cv * pos;
             }
@@ -710,7 +813,7 @@ int main(int argc, char** argv) {
         });
 #ifdef USE_ROS2
         s.add_rate_source<>("tf_pub", 100.0, [&]() {
-            rcl_tf.pub_robot_tf(*tf, [](SimpleFrame frame) { return SimpleFrame_to_str(frame); });
+            rcl_tf.pub_robot_tf(*tf, [](SentryFrame frame) { return SentryFrame_to_str(frame); });
         });
 #endif
     }
