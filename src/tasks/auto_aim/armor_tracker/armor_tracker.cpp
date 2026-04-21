@@ -72,7 +72,7 @@ struct ArmorTracker::Impl {
         for (auto& a: armors.armors) {
             if (!(a.color == ArmorColor::NONE || a.color == ArmorColor::PURPLE) && !found) {
                 if (!(target_buf_[cur_target_idx_].target_number == ArmorClass::OUTPOST
-                      && a.number != ArmorClass::OUTPOST))
+                      && a.number != ArmorClass::OUTPOST && target_buf_[cur_target_idx_].check()))
                 {
                     init_target = a;
                     found = true;

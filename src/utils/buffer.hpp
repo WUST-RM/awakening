@@ -140,11 +140,11 @@ public:
 public:
     ResourcePool() = default;
 
-    void addResource(T&& resource) {
+    void add_resource(T&& resource) {
         resources_.emplace_back(Resource { std::move(resource), MovableAtomicBool(false) });
     }
 
-    void addResource(const T& resource) {
+    void add_resource(const T& resource) {
         resources_.emplace_back(Resource { resource, MovableAtomicBool(false) });
     }
 

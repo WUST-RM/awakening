@@ -148,14 +148,17 @@ function(add_common_executable exe_name src_file)
     target_link_libraries(${exe_name}  ${PROJECT_NAME}_utils relink)
 endfunction()
 add_common_executable(auto_aim src/runtime/auto_aim.cpp)
-
+add_common_executable(uvc_detect_test src/runtime/test/uvc_detect_test.cpp)
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_auto_aim
 )
-
+target_link_libraries(uvc_detect_test
+    ${PROJECT_NAME}_auto_aim
+)
 if(ROS2_FULL_FOUND)
 add_common_executable(nav src/runtime/nav.cpp)
 add_common_executable(sentry src/runtime/sentry.cpp)
+
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_rcl
 )

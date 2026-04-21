@@ -1,3 +1,4 @@
+#include "utils/buffer.hpp"
 #ifdef USE_OPENVINO
     #include "net_detector_openvino.hpp"
     #include "openvino/openvino.hpp"
@@ -15,11 +16,12 @@ struct NetDetectorOpenVINO::Impl {
     struct Params {
         std::string model_path;
         std::string device_name;
-
+        int infer_request_buffer_num = 10;
         std::optional<ov::hint::PerformanceMode> perf_mode;
         std::optional<ov::hint::Priority> priority;
         std::optional<ov::hint::SchedulingCoreType> scheduling_core_type;
         std::optional<ov::hint::ExecutionMode> execution_mode;
+        // std::optional<ov::hint::ModelDistributionPolicy> distribution_policy;
         static ov::hint::PerformanceMode perfModeFromString(const std::string& s) {
             auto v = to_upper(s);
             if (v == "LATENCY")
@@ -96,6 +98,11 @@ struct NetDetectorOpenVINO::Impl {
             if (config["execution_mode"]) {
                 execution_mode = execModeFromString(config["execution_mode"].as<std::string>());
             }
+            // if (config["distribution_policy"]) {
+            //     distribution_policy =
+            //         modelDistFromString(config["distribution_policy"].as<std::string>());
+            // }
+            infer_request_buffer_num = config["infer_request_buffer_num"].as<int>();
         }
 
         [[nodiscard]] ov::AnyMap anyMap() const {
@@ -111,6 +118,9 @@ struct NetDetectorOpenVINO::Impl {
             if (priority.has_value()) {
                 m.emplace(ov::hint::model_priority(priority.value()));
             }
+            // if (distribution_policy.has_value()) {
+            //     m.emplace(ov::hint::model_distribution_policy(distribution_policy.value()));
+            // }
             if (scheduling_core_type.has_value()) {
                 if (device_name.find("CPU") != std::string::npos) {
                     m.emplace(ov::hint::scheduling_core_type(scheduling_core_type.value()));
@@ -170,10 +180,13 @@ struct NetDetectorOpenVINO::Impl {
         compiled_model_ = std::make_unique<ov::CompiledModel>(
             ov_core_->compile_model(model_, params_.device_name, any_map)
         );
+        for (int i = 0; i < params_.infer_request_buffer_num; ++i) {
+            infer_request_buffer_.add_resource(create_infer_request());
+        }
         AWAKENING_INFO("OpenVINO model : {} compiled successfully!", params_.model_path);
         resetting_ = false;
     }
-    ov::InferRequest createInferRequest() noexcept {
+    ov::InferRequest create_infer_request() noexcept {
         return compiled_model_->create_infer_request();
     }
     ov::Tensor infer(const ov::Tensor& input_tensor, ov::InferRequest& infer_request) noexcept {
@@ -184,21 +197,17 @@ struct NetDetectorOpenVINO::Impl {
     ov::Tensor infer(const ov::Tensor& input_tensor) noexcept {
         auto infer_request = compiled_model_->create_infer_request();
 
-        infer_request.set_input_tensor(input_tensor);
-        infer_request.infer();
-        return infer_request.get_output_tensor();
+        return infer(input_tensor, infer_request);
     }
-    ov::Tensor infer_thread_local(const ov::Tensor& input_tensor) noexcept {
-        static thread_local std::unique_ptr<ov::InferRequest> infer_request;
-        if (!infer_request) {
-            infer_request = std::make_unique<ov::InferRequest>(createInferRequest());
+    ov::Tensor infer_buffer(const ov::Tensor& input_tensor) noexcept {
+        auto r = infer_request_buffer_.acquire();
+        if (!r) {
+            return infer(input_tensor);
         }
+        auto& infer_request = *r;
 
-        infer_request->set_input_tensor(input_tensor);
-        infer_request->infer();
-        return infer_request->get_output_tensor();
+        return infer(input_tensor, infer_request);
     }
-
     OutPut detect(const cv::Mat& img, PixelFormat format) noexcept {
         if (resetting_ || img.empty()) {
             return {};
@@ -218,7 +227,7 @@ struct NetDetectorOpenVINO::Impl {
             output.resized_img.data
         );
 
-        const auto output_tensor = infer_thread_local(input_tensor);
+        const auto output_tensor = infer_buffer(input_tensor);
         const auto& shape = output_tensor.get_shape();
 
         auto ptr = output_tensor.data<float>();
@@ -232,6 +241,7 @@ struct NetDetectorOpenVINO::Impl {
         return output;
     }
     std::atomic<bool> resetting_;
+    ResourcePool<ov::InferRequest> infer_request_buffer_;
     std::unique_ptr<ov::Core> ov_core_;
     std::unique_ptr<ov::CompiledModel> compiled_model_;
     std::shared_ptr<ov::Model> model_;

@@ -249,12 +249,6 @@ public:
             }
         }
 
-        for (auto& node: source_snapshot_) {
-            if (node->connected_count == 0) {
-                throw std::runtime_error("Source '" + node->name + "' has no downstream");
-            }
-        }
-
         built_ = true;
     }
 

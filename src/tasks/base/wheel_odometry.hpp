@@ -50,7 +50,7 @@ namespace wheel_motion_model {
 
         template<typename T>
         void clamp(T x[X_N]) const {}
-        void f(const VecX& x0, VecX& x1) const {
+        inline void f(const VecX& x0, VecX& x1) const {
             assert(x0.size() == X_N);
             assert(x1.size() == X_N);
             operator()(x0.data(), x1.data());
@@ -69,11 +69,11 @@ namespace wheel_motion_model {
         VecX x;
         TimePoint timestamp;
 
-        void predict(const TimePoint& t) {
+        inline void predict(const TimePoint& t) {
             auto dt = std::chrono::duration<double>(t - timestamp).count();
             predict(dt);
         }
-        void predict(double dt) {
+        inline void predict(double dt) {
             Predict p {
                 .dt = dt,
             };
@@ -82,11 +82,11 @@ namespace wheel_motion_model {
                 std::chrono::duration_cast<TimePoint::duration>(std::chrono::duration<double>(dt));
         }
 
-        Vec3 pos() const noexcept {
+        inline Vec3 pos() const noexcept {
             return Vec3(x[idx::X], x[idx::Y], x[idx::Z]);
         }
 
-        Vec3 vel() const noexcept {
+        inline Vec3 vel() const noexcept {
             return Vec3(x[idx::VX], x[idx::VY], x[idx::VZ]);
         }
     };
@@ -96,7 +96,7 @@ public:
     struct Params {
         Vec3 q_xyz;
         Vec3 r_vxyz;
-        void load(const YAML::Node& config) {
+        inline void load(const YAML::Node& config) {
             auto q_xyz_vec = config["q_xyz"].as<std::vector<double>>();
             q_xyz = Vec3(q_xyz_vec[0], q_xyz_vec[1], q_xyz_vec[2]);
 
@@ -108,7 +108,7 @@ public:
         params_.load(config);
         reset(t);
     }
-    void reset(const TimePoint& t) {
+    inline void reset(const TimePoint& t) {
         Eigen::DiagonalMatrix<double, wheel_motion_model::X_N> p0;
         p0.diagonal() << 1, 64, 1, 64, 1, 64;
         const auto u_q = [this]() {
@@ -154,8 +154,8 @@ public:
         is_inited = true;
         last_update = t;
     }
-    Eigen::Matrix<double, wheel_motion_model::X_N, wheel_motion_model::X_N> process_noise(double dt
-    ) const noexcept {
+    inline Eigen::Matrix<double, wheel_motion_model::X_N, wheel_motion_model::X_N>
+    process_noise(double dt) const noexcept {
         Eigen::Matrix<double, wheel_motion_model::X_N, wheel_motion_model::X_N> q;
         Vec3 q_xyz = params_.q_xyz;
 
@@ -178,7 +178,7 @@ public:
         // clang-format on
         return q;
     }
-    Eigen::Matrix<double, wheel_motion_model::Z_N, wheel_motion_model::Z_N>
+    inline Eigen::Matrix<double, wheel_motion_model::Z_N, wheel_motion_model::Z_N>
     measurement_covariance(const Eigen::Matrix<double, wheel_motion_model::Z_N, 1>& z
     ) const noexcept {
         Eigen::Matrix<double, wheel_motion_model::Z_N, wheel_motion_model::Z_N> r;
@@ -192,7 +192,7 @@ public:
 
         return r;
     }
-    void predict_ekf(const TimePoint& timestamp) {
+    inline void predict_ekf(const TimePoint& timestamp) {
         if (!esekf) {
             throw std::runtime_error("ESEKF is not initialized");
         }
@@ -202,7 +202,7 @@ public:
         state.x = esekf.value().predict();
         state.timestamp = timestamp;
     }
-    void update(const Vec3& v, const TimePoint& t) {
+    inline void update(const Vec3& v, const TimePoint& t) {
         if (!esekf) {
             throw std::runtime_error("ESEKF is not initialized");
         }
@@ -221,7 +221,7 @@ public:
             reset(t);
         }
     }
-    void write_log() {
+    inline void write_log() {
         web::write_log("wheel_odometry", [&](auto& j) {
             j["timestamp"] = static_cast<int>(
                 std::chrono::duration<double>(last_update.time_since_epoch()).count()

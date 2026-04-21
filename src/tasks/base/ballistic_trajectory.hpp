@@ -40,7 +40,7 @@ public:
         return std::make_shared<BallisticTrajectory>(config);
     }
 
-    std::optional<double> solve_pitch(const Vec3& target_pos, double v0) const {
+    inline std::optional<double> solve_pitch(const Vec3& target_pos, double v0) const {
         const double h = target_pos.z();
         const double d = std::hypot(target_pos.x(), target_pos.y());
 
@@ -96,7 +96,7 @@ public:
         return std::nullopt;
     }
 
-    std::optional<std::pair<double, double>>
+    inline std::optional<std::pair<double, double>>
     solve_pitch_and_flytime(const Vec3& target_pos, double v0) const {
         const double d = std::hypot(target_pos.x(), target_pos.y());
 
@@ -134,7 +134,7 @@ private:
     double g_;
 
 private:
-    double flight_time(double distance, double v0, double pitch) const {
+    inline double flight_time(double distance, double v0, double pitch) const {
         const double cos_theta = std::cos(pitch);
         if (std::abs(cos_theta) < kEps) {
             return std::numeric_limits<double>::infinity();
@@ -148,7 +148,7 @@ private:
         return std::expm1(kd) / (k_ * v0 * cos_theta);
     }
 
-    std::pair<double, double> forward_model(double pitch, double v0, double t) const {
+    inline std::pair<double, double> forward_model(double pitch, double v0, double t) const {
         const double cos_theta = std::cos(pitch);
 
         // x = ln(1 + k*v*cos*t) / k
@@ -164,7 +164,7 @@ struct Bullet {
     TimePoint fire_time;
     ISO3 fire_time_shoot_in_odom;
     double speed_in_odom;
-    std::optional<Vec3>
+    inline std::optional<Vec3>
     get_pos_at(TimePoint t, BallisticTrajectory::Ptr b, const std::pair<double, double>& offset)
         const {
         double dt = std::chrono::duration<double>(t - fire_time).count();
@@ -188,11 +188,11 @@ public:
     BulletPickUp(const YAML::Node& config) {
         b = BallisticTrajectory::create(config["ballistic_trajectory"]);
     }
-    void push_back(const Bullet& bullet) {
+    inline void push_back(const Bullet& bullet) {
         std::lock_guard<std::mutex> lock(mtx);
         bullets.push_back(std::move(bullet));
     }
-    void update(TimePoint t, double max_fly_time) {
+    inline void update(TimePoint t, double max_fly_time) {
         if (bullets.empty())
             return;
         std::lock_guard<std::mutex> lock(mtx);
@@ -203,7 +203,7 @@ public:
             bullets.pop_front();
         }
     }
-    std::vector<Vec3>
+    inline std::vector<Vec3>
     get_bullet_positions(TimePoint t, const std::pair<double, double>& offset) const {
         std::lock_guard<std::mutex> lock(mtx);
         std::vector<Vec3> positions;

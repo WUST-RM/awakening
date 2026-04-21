@@ -31,7 +31,7 @@ wheel_odometry:
 bullet_pick_up:
   ballistic_trajectory:
     gravity: 9.8
-    resistance: 0.092
+    resistance: 0.001
   
 auto_exposure:
   enable: true
@@ -57,6 +57,7 @@ armor_detector:
       priority: "HIGH"
       # scheduling_core_type: "PCORE_ONLY"
       execution_mode: "PERFORMANCE"
+      infer_request_buffer_num: 10
     tensorrt:
       model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
       copy_context_num: 3
@@ -127,7 +128,7 @@ very_aimer:
   min_enable_yaw_deg: 0.25
   ballistic_trajectory:
     gravity: 9.8
-    resistance: 0.092
+    resistance: 0.001
 
 
 

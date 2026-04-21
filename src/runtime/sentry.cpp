@@ -409,35 +409,8 @@ int main(int argc, char** argv) {
 
             if (robo_opt.has_value()) {
                 auto robo = robo_opt.value();
-                uint32_t t_micro = std::chrono::duration_cast<std::chrono::microseconds>(
-                                       std::chrono::steady_clock::now() - start_tp
-                )
-                                       .count();
-                static uint32_t last_pc_send = 0;
-                static utils::MovingAverage<uint32_t, 1000> avg;
-                uint32_t delay_micro = 0;
-                auto compute_delay = [&](uint32_t pc_send, uint32_t stm_recv, uint32_t stm_send
-                                     ) -> uint32_t {
-                    int64_t raw = (int64_t)t_micro - (int64_t)pc_send
-                        - ((int64_t)stm_send - (int64_t)stm_recv);
-                    return static_cast<uint32_t>(raw / 2);
-                };
-
-                uint32_t pc_send_micro = robo.time_stamp_pc;
-
-                if (pc_send_micro != last_pc_send) {
-                    last_pc_send = pc_send_micro;
-
-                    uint32_t new_delay = compute_delay(
-                        pc_send_micro,
-                        robo.time_stamp_receive_micro,
-                        robo.time_stamp_send_micro
-                    );
-
-                    delay_micro = avg.update(new_delay);
-                }
                 std::chrono::time_point<std::chrono::steady_clock> packet_time =
-                    std::chrono::steady_clock::now() - std::chrono::microseconds(delay_micro);
+                    std::chrono::steady_clock::now();
                 double yaw = angles::from_degrees(robo.yaw);
                 double pitch = angles::from_degrees(robo.pitch);
                 double roll = angles::from_degrees(robo.roll);
@@ -451,8 +424,8 @@ int main(int argc, char** argv) {
                     packet_time,
                     gimbal_2_gimbal_odom
                 );
-                double vx = robo.v_y;
-                double vy = -robo.v_x;
+                double vx = robo.v_x;
+                double vy = robo.v_y;
                 double vz = robo.v_z;
                 wheel_odometry.predict_ekf(packet_time);
                 wheel_odometry.update(Vec3(vx, vy, vz), packet_time);
@@ -488,7 +461,7 @@ int main(int argc, char** argv) {
                 ypr[0] = angles::from_degrees(big_yaw_in_world);
                 ypr[1] = 0.0;
                 ISO3 big_yaw_2_gimbal_odom = ISO3::Identity();
-                big_yaw_2_gimbal_odom.translation() = Vec3(0, 0, -0.1);
+                big_yaw_2_gimbal_odom.translation() = Vec3(0, 0, 0.0);
                 big_yaw_2_gimbal_odom.linear() = utils::euler2matrix(ypr, utils::EulerOrder::ZYX);
                 tf->push(
                     SentryFrame::GIMBAL_ODOM,
@@ -533,7 +506,6 @@ int main(int argc, char** argv) {
                         cv::Mat gray;
                         cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
                         const double brightness = cv::mean(gray)[0];
-
                         const double diff = brightness - cfg.ttarget_brightness;
                         const double exposure_min = cfg.exposure_min;
                         const double exposure_max = cfg.exposure_max;
@@ -631,10 +603,12 @@ int main(int argc, char** argv) {
     });
     s.add_rate_source<>("solver", 1000.0, [&]() {
         log_ctx.solve_count++;
+        bool is_omni = false;
         auto_aim::ArmorTarget target;
         target = armor_target.read();
         if (!target.check()) {
             target = omni_armor_target.read();
+            is_omni = true;
         }
         int old_this_id = target.this_id;
         auto gimbal_odom_state_in_odom = wheel_odometry.state; //转为相对gimbal_odom
@@ -653,7 +627,12 @@ int main(int argc, char** argv) {
             .appear = false,
         };
         if (target.check()) {
-            cmd = very_aimer.very_aim(target, bullet_speed, auto_aim_fsm_controller.get_state());
+            cmd = very_aimer.very_aim(
+                target,
+                (!is_omni ? bullet_speed : 100.0),
+                (!is_omni ? auto_aim_fsm_controller.get_state()
+                          : auto_aim::AutoAimFsm::AIM_SINGLE_ARMOR)
+            );
         }
 
         if (serial) {
@@ -689,7 +668,8 @@ int main(int argc, char** argv) {
             auto_aim_dbg->gimbal_cmd.set(cmd);
         }
     });
-    s.add_rate_source<>("armor_omni", armor_omni.fps_, [&]() {
+    auto armor_omni_task = s.register_source<>("armor_omni");
+    s.add_rate_source<>("armor_omni_tragger", armor_omni.fps_, [&]() {
         auto main_target = armor_target.read();
         if (main_target.check()) {
             return;
@@ -700,53 +680,103 @@ int main(int argc, char** argv) {
             AWAKENING_WARN("Failed to read image from camera.");
             return;
         }
+
         CommonFrame common_frame;
         common_frame.expanded = cv::Rect(0, 0, img_frame.src_img.cols, img_frame.src_img.rows);
         common_frame.offset = cv::Point2f(0, 0);
         common_frame.img_frame = std::move(img_frame);
         common_frame.frame_id = one.cv_frame_id;
-        auto_aim::Armors armors { .timestamp = common_frame.img_frame.timestamp,
-                                  .id = common_frame.frame_id,
-                                  .frame_id = common_frame.frame_id };
-        auto tmp_armors = armor_omni.detector_->detect(common_frame);
-        for (auto& a: tmp_armors) {
-            if ((enemy_color == EnemyColor::BLUE && a.color == auto_aim::ArmorColor::RED)
-                || (enemy_color == EnemyColor::RED && a.color == auto_aim::ArmorColor::BLUE))
-            {
-                continue;
-            }
-            armors.armors.push_back(a);
-        }
-        auto camera_cv_in_odom =
-            tf->pose_a_in_b(SentryFrame(armors.frame_id), SentryFrame::ODOM, armors.timestamp);
-        armors.frame_id = std::to_underlying(SentryFrame::ODOM);
-        one.target = armor_tracker.track(armors, camera_info, camera_cv_in_odom, armors.frame_id);
-        if (!one.target.check()) {
-            one.target.update_count = 0;
-        }
-        one.total_score = one.target.update_count;
-        auto best_target = armor_omni.update();
-        omni_armor_target.write(best_target);
-        auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                              std::chrono::steady_clock::now() - armors.timestamp
-        )
-                              .count();
-        log_ctx.omni_count++;
-        log_ctx.latency_ms_total += latency_ms;
-        if (auto_aim_dbg) {
-#ifdef USE_ROS2
-            rcl::pub_armor_marker(rcl_node, SentryFrame_to_str(armors.frame_id), armors);
-            rcl::pub_armor_target_marker(
-                rcl_node,
-                SentryFrame_to_str(best_target.get_target_state().frame_id),
-                best_target
+        common_frame.id = one.order_id++;
+        auto target = one.target;
+        if (target.check()) {
+            auto camera_cv_in_old = tf->pose_a_in_b(
+                SentryFrame(common_frame.frame_id),
+                SentryFrame(target.get_target_state().frame_id),
+                common_frame.img_frame.timestamp
             );
-#endif
+            target.set_target_state([&](armor_point_motion_model::State& state) {
+                state.predict(common_frame.img_frame.timestamp, target.target_number);
+            });
+            auto bbox = target.expanded_one_one(
+                common_frame.img_frame.timestamp,
+                camera_cv_in_old,
+                camera_info,
+                common_frame.img_frame.src_img.size()
+            );
+            if (bbox.area() > 200) {
+                common_frame.expanded = bbox;
+                common_frame.offset = cv::Point2f(bbox.x, bbox.y);
+            }
         }
+        s.runtime_push_source<>(armor_omni_task, [&, f = std::move(common_frame)]() {
+            static std::unique_ptr<std::counting_semaphore<>> detector_sem;
+            if (!detector_sem) {
+                detector_sem = std::make_unique<std::counting_semaphore<>>(
+                    config["armor_omni"]["max_infer_num"].as<int>()
+                );
+            }
+            {
+                auto_aim::Armors armors { .timestamp = f.img_frame.timestamp,
+                                          .id = f.id,
+                                          .frame_id = f.frame_id };
+                {
+                    bool got = detector_sem->try_acquire();
+                    utils::SemaphoreGuard guard(*detector_sem, got);
+                    if (got) {
+                        auto tmp_armors = armor_omni.detector_->detect(f);
+                        for (auto& a: tmp_armors) {
+                            if ((enemy_color == EnemyColor::BLUE
+                                 && a.color == auto_aim::ArmorColor::RED)
+                                || (enemy_color == EnemyColor::RED
+                                    && a.color == auto_aim::ArmorColor::BLUE))
+                            {
+                                continue;
+                            }
+                            armors.armors.push_back(a);
+                        }
+                    }
+                }
+
+                one.armors_queue->enqueue(armors);
+            }
+
+            auto batch_armors = one.armors_queue->dequeue_batch();
+            for (auto& _armors: batch_armors) {
+                auto camera_cv_in_odom = tf->pose_a_in_b(
+                    SentryFrame(_armors.frame_id),
+                    SentryFrame::ODOM,
+                    _armors.timestamp
+                );
+                _armors.frame_id = std::to_underlying(SentryFrame::ODOM);
+                one.target =
+                    one.tracker->track(_armors, camera_info, camera_cv_in_odom, _armors.frame_id);
+                if (!one.target.check()) {
+                    one.target.update_count = 0;
+                }
+                one.total_score = one.target.update_count;
+                auto best_target = armor_omni.update();
+                omni_armor_target.write(best_target);
+                auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                      std::chrono::steady_clock::now() - _armors.timestamp
+                )
+                                      .count();
+                log_ctx.omni_latency_ms_total += latency_ms;
+                log_ctx.omni_count++;
+                if (auto_aim_dbg) {
+#ifdef USE_ROS2
+                    rcl::pub_armor_target_marker(
+                        rcl_node,
+                        SentryFrame_to_str(best_target.get_target_state().frame_id),
+                        best_target
+                    );
+#endif
+                }
+            }
+        });
     });
     s.add_rate_source<>("logger", 1.0, [&]() {
         double avg_latency_ms = log_ctx.latency_ms_total / log_ctx.track_count;
-        double omni_avg_latency_ms = log_ctx.latency_ms_total / log_ctx.omni_count;
+        double omni_avg_latency_ms = log_ctx.omni_latency_ms_total / log_ctx.omni_count;
         AWAKENING_INFO(
             "detect: {} track: {} found: {} solve: {} serial: {} camera: {} avg_latency: {:.3} ms omni: {} avg_latency: {:.3} ms",
             log_ctx.detect_count,
@@ -770,7 +800,12 @@ int main(int argc, char** argv) {
                 return;
             }
             auto target = armor_target.read();
-            target.write_log();
+            if (!target.check()) {
+                omni_armor_target.read().write_log();
+            } else {
+                target.write_log();
+            }
+
             wheel_odometry.write_log();
             auto img_now = auto_aim_dbg->img_frame.get().timestamp;
             auto_aim_dbg->armor_target.set(target);

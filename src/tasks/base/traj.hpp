@@ -68,29 +68,29 @@ public:
     using Traits = TimeTraits<TimeT>;
     using duration_type = typename Traits::duration_type;
 
-    void reserve(size_type n) {
+    inline void reserve(size_type n) {
         cp_.reserve(n);
         prefix_.reserve(n);
     }
 
-    void clear() noexcept {
+    inline void clear() noexcept {
         cp_.clear();
         prefix_.clear();
     }
-    void push_back(const PointT& p, TimeT t) {
+    inline void push_back(const PointT& p, TimeT t) {
         cp_.emplace_back(p);
         prefix_.emplace_back(t);
     }
 
-    [[nodiscard]] TimeT time_at(size_type i) const noexcept {
+    [[nodiscard]] inline TimeT time_at(size_type i) const noexcept {
         return prefix_[i];
     }
 
-    [[nodiscard]] const PointT& state_at(size_type i) const noexcept {
+    [[nodiscard]] inline const PointT& state_at(size_type i) const noexcept {
         return cp_[i];
     }
 
-    [[nodiscard]] PointT state_at(TimeT t) const {
+    [[nodiscard]] inline PointT state_at(TimeT t) const {
         if (cp_.empty()) [[unlikely]]
             return {};
 
@@ -117,21 +117,21 @@ public:
         return PointT::lerp(cp_[i0], cp_[i1], a);
     }
 
-    [[nodiscard]] duration_type duration() const noexcept {
+    [[nodiscard]] inline duration_type duration() const noexcept {
         return prefix_.back() - prefix_[0];
     }
 
-    [[nodiscard]] size_type size() const noexcept {
+    [[nodiscard]] inline size_type size() const noexcept {
         return cp_.size();
     }
 
-    [[nodiscard]] bool empty() const noexcept {
+    [[nodiscard]] inline bool empty() const noexcept {
         return cp_.empty();
     }
-    std::vector<PointT>& get_cp_vec() noexcept {
+    inline std::vector<PointT>& get_cp_vec() noexcept {
         return cp_;
     }
-    const std::vector<TimeT>& get_prefix() const noexcept {
+    inline const std::vector<TimeT>& get_prefix() const noexcept {
         return prefix_;
     }
 

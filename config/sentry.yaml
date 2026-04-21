@@ -1,4 +1,4 @@
-enemy_color: red
+enemy_color: blue
 max_infer_num: 5
 bullet_speed: 21.0
 
@@ -25,11 +25,13 @@ tf:
     t: [0.1,0.0,0.0]
     R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
   omin_0_in_big_yaw:
-    t: [0.0,0.0,0.0]
+    t: [0.0,0.2,-0.1]
     R: [0.0,-1.0,0.0,1.0,0.0,0.0,0.0,0.0,1.0]
   omin_1_in_big_yaw:
-    t: [0.0,0.0,0.0]
-    R: [-0.2923717,-0.95630476,0.95630476,-0.2923717,0.,0.,0.,1.]
+    t: [-0.1,-0.15,-0.1]
+    R: [-0.74314483,  0.66913061,  0.,
+      -0.66913061, -0.74314483 , 0.  ,
+       0.  ,        0.  ,        1.    ]
 
 
 wheel_odometry:
@@ -66,6 +68,7 @@ armor_detector:
       priority: "HIGH"
       # scheduling_core_type: "PCORE_ONLY"
       execution_mode: "PERFORMANCE"
+      infer_request_buffer_num: 10
     tensorrt:
       model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
       copy_context_num: 3
@@ -107,7 +110,7 @@ auto_aim_fsm:
 
 very_aimer:
   base_yaw_offset: -0.5
-  base_pitch_offset: 0.0
+  base_pitch_offset: -2.0
   # base_yaw_offset: -0.0
   # base_pitch_offset: -0.0
   sample_total_time: 1.0
@@ -244,25 +247,27 @@ camera:
     #             0.     ,    0.     ,    1.     ,    0.     ]
 
 armor_omni:
-  fps: 10.0
+  fps: 60.0
+  max_infer_num: 3
   armor_detector:
     armor_infer:
       model_type: tup
       conf_threshold: 0.2
-      net_detector:
-        backend: openvino
-        openvino:
-          model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
-          device_name: "GPU"
-          perf_mode: "THROUGHPUT"
-          priority: "HIGH"
-          # scheduling_core_type: "PCORE_ONLY"
-          execution_mode: "PERFORMANCE"
-        tensorrt:
-          model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
-          copy_context_num: 3
-          min_free_mem_ratio: 0.1
-          use_cuda_preproces: true
+    net_detector:
+      backend: openvino
+      openvino:
+        model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
+        device_name: "GPU"
+        perf_mode: "THROUGHPUT"
+        priority: "HIGH"
+        # scheduling_core_type: "PCORE_ONLY"
+        execution_mode: "PERFORMANCE"
+        infer_request_buffer_num: 10
+      tensorrt:
+        model_path: ${ROOT_DIR}/model/opt-1208-001.onnx
+        copy_context_num: 3
+        min_free_mem_ratio: 0.1
+        use_cuda_preproces: true
     number_classifier:
       enable: true
       model_path: ${ROOT_DIR}/model/mlp.onnx
@@ -287,11 +292,11 @@ armor_omni:
     esekf_iter_num: 1
   camera0:
     uvc_camera:
-      device_name: "/dev/v4l/by-path/pci-0000:00:14.0-usb-0:9.4:1.0-video-index0"
+      device_name: "/dev/v4l/by-path/pci-0000:00:14.0-usb-0:7.1:1.0-video-index0"
       fps: 30
       width: 1280
       height: 720
-      exposure: 200
+      exposure: 50
       gain: 10.0
       gamma: 100
     camera_info:
@@ -321,11 +326,11 @@ armor_omni:
                   0.     ,    0.     ,    1.     ,    0.     ]
   camera1:
     uvc_camera:
-      device_name: "/dev/v4l/by-path/pci-0000:00:14.0-usb-0:9.1:1.0-video-index0"
+      device_name: "/dev/v4l/by-path/pci-0000:00:14.0-usb-0:7.3:1.0-video-index0"
       fps: 30
       width: 1280
       height: 720
-      exposure: 200
+      exposure: 50
       gain: 10.0
       gamma: 100
     camera_info:
@@ -353,4 +358,37 @@ armor_omni:
         data: [1793.54229,    0.     ,  730.67194,    0.     ,
                   0.     , 1794.48784,  529.46193,    0.     ,
                   0.     ,    0.     ,    1.     ,    0.     ]
-
+uvc_camera_test:
+  uvc_camera:
+      device_name: "/dev/v4l/by-path/pci-0000:00:14.0-usb-0:7.1:1.0-video-index0"
+      fps: 30
+      width: 1280
+      height: 720
+      exposure: 50
+      gain: 10.0
+      gamma: 100
+  camera_info:
+      image_width: 1440
+      image_height: 1080
+      camera_name: narrow_stereo
+      camera_matrix:
+        rows: 3
+        cols: 3
+        data: [759.73071, 0.0, 336.19053, 0.0, 761.16771, 231.83002, 0.0, 0.0, 1.0     ]
+      distortion_model: plumb_bob
+      distortion_coefficients:
+        rows: 1
+        cols: 5
+        data: [0.000281, 0.144018, 0.005509, -0.004330, 0.0]
+      rectification_matrix:
+        rows: 3
+        cols: 3
+        data: [1., 0., 0.,
+              0., 1., 0.,
+              0., 0., 1.]
+      projection_matrix:
+        rows: 3
+        cols: 4
+        data: [1793.54229,    0.     ,  730.67194,    0.     ,
+                  0.     , 1794.48784,  529.46193,    0.     ,
+                  0.     ,    0.     ,    1.     ,    0.     ]

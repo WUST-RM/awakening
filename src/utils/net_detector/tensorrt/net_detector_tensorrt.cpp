@@ -109,7 +109,7 @@ struct NetDetectorTensorrt::Impl {
             TRT_CHECK(cudaMalloc(&ctx.device_buffers[output_idx_], output_sz_ * sizeof(float)));
             ctx.output_buffer.resize(output_sz_);
             TRT_CHECK(cudaStreamCreate(&ctx.stream));
-            ctx_buffers_.addResource(std::move(ctx));
+            ctx_buffers_.add_resource(std::move(ctx));
         }
     }
     void buildEngine(const std::string& onnx_path) {

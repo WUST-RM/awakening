@@ -139,7 +139,7 @@ def matrix2euler(R, order="ZYX"):
 
 
 if __name__ == "__main__":
-    angles = np.array([(107 * np.pi / 180), 0.0, 0.0])
+    angles = np.array([(-138 * np.pi / 180), 0.0, 0.0])
 
     order = "ZYX"
     R = euler2matrix(angles, order)

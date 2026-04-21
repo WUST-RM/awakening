@@ -367,35 +367,9 @@ int main(int argc, char** argv) {
             log_ctx.serial_count++;
             if (robo_opt.has_value()) {
                 auto robo = robo_opt.value();
-                uint32_t t_micro = std::chrono::duration_cast<std::chrono::microseconds>(
-                                       std::chrono::steady_clock::now() - start_tp
-                )
-                                       .count();
-                static uint32_t last_pc_send = 0;
-                static utils::MovingAverage<uint32_t, 1000> avg;
-                uint32_t delay_micro = 0;
-                auto compute_delay = [&](uint32_t pc_send, uint32_t stm_recv, uint32_t stm_send
-                                     ) -> uint32_t {
-                    int64_t raw = (int64_t)t_micro - (int64_t)pc_send
-                        - ((int64_t)stm_send - (int64_t)stm_recv);
-                    return static_cast<uint32_t>(raw / 2);
-                };
 
-                uint32_t pc_send_micro = robo.time_stamp_pc;
-
-                if (pc_send_micro != last_pc_send) {
-                    last_pc_send = pc_send_micro;
-
-                    uint32_t new_delay = compute_delay(
-                        pc_send_micro,
-                        robo.time_stamp_receive_micro,
-                        robo.time_stamp_send_micro
-                    );
-
-                    delay_micro = avg.update(new_delay);
-                }
                 std::chrono::time_point<std::chrono::steady_clock> packet_time =
-                    std::chrono::steady_clock::now() - std::chrono::microseconds(delay_micro);
+                    std::chrono::steady_clock::now();
                 double yaw = angles::from_degrees(robo.yaw);
                 double pitch = angles::from_degrees(robo.pitch);
                 double roll = angles::from_degrees(robo.roll);
@@ -409,8 +383,8 @@ int main(int argc, char** argv) {
                     packet_time,
                     gimbal_2_gimbal_odom
                 );
-                double vx = robo.v_y;
-                double vy = -robo.v_x;
+                double vx = robo.v_x;
+                double vy = robo.v_y;
                 double vz = robo.v_z;
                 wheel_odometry.predict_ekf(packet_time);
                 wheel_odometry.update(Vec3(vx, vy, vz), packet_time);

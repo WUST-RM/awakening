@@ -4,6 +4,7 @@
 #include "tasks/auto_aim/armor_tracker/armor_tracker.hpp"
 #include "tasks/base/common.hpp"
 #include "type.hpp"
+#include "utils/buffer.hpp"
 #include "utils/drivers/uvc_camera.hpp"
 #include <memory>
 #include <opencv2/core/types.hpp>
@@ -17,8 +18,10 @@ public:
         std::unique_ptr<ArmorTracker> tracker;
         ArmorTarget target;
         CameraInfo camera_info;
+        std::unique_ptr<utils::OrderedQueue<auto_aim::Armors>> armors_queue;
         int frame_id;
         int cv_frame_id;
+        int order_id = 0;
         double total_score;
         One(const YAML::Node& config,
             int frame_id,
@@ -29,7 +32,9 @@ public:
             this->frame_id = frame_id;
             this->cv_frame_id = cv_frame_id;
             this->total_score = 0.0;
+            this->order_id = 0;
             camera_info.load(config["camera_info"]);
+            armors_queue = std::make_unique<utils::OrderedQueue<auto_aim::Armors>>();
             tracker = std::make_unique<ArmorTracker>(tracker_config);
         }
     };

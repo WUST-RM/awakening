@@ -152,10 +152,10 @@ public:
                 < cfg.lost_time_thres;
         return v;
     }
-    [[nodiscard]] int armor_num() const noexcept {
+    [[nodiscard]] inline int armor_num() const noexcept {
         return measure_ctx.armor_num;
     }
-    void write_log() {
+    inline void write_log() {
         web::write_log("armor_target", [&](auto& j) {
             j["timestamp"] = static_cast<int>(
                 std::chrono::duration<double>(last_update.time_since_epoch()).count()

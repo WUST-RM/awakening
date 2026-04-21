@@ -50,7 +50,7 @@ struct Predict {
     auto_aim::ArmorClass armor_number = auto_aim::ArmorClass::UNKNOWN;
 
     template<typename T>
-    void operator()(const T x0[X_N], T x1[X_N]) const {
+    inline void operator()(const T x0[X_N], T x1[X_N]) const {
         std::copy(x0, x0 + X_N, x1);
 
         if (armor_number != auto_aim::ArmorClass::OUTPOST) {
@@ -67,7 +67,7 @@ struct Predict {
     }
 
     template<typename T>
-    void clamp(T x[X_N]) const {
+    inline void clamp(T x[X_N]) const {
         auto& r = x[idx::R];
         auto& l = x[idx::L];
         auto& h = x[idx::H];
@@ -90,7 +90,7 @@ struct Predict {
             vyaw = T(0.0);
         }
     }
-    void f(const VecX& x0, VecX& x1) const {
+    inline void f(const VecX& x0, VecX& x1) const {
         assert(x0.size() == X_N);
         assert(x1.size() == X_N);
         operator()(x0.data(), x1.data());
@@ -98,7 +98,7 @@ struct Predict {
 };
 
 template<typename T>
-void project_points_jets(
+inline void project_points_jets(
     const std::vector<cv::Point3f>& obj_pts,
     const Eigen::Transform<T, 3, Eigen::Isometry>& pose_cam,
     const cv::Mat& K,
@@ -172,7 +172,7 @@ struct Measure {
     } ctx;
 
     template<typename T>
-    void operator()(const T x[X_N], T z[Z_N]) const {
+    inline void operator()(const T x[X_N], T z[Z_N]) const {
         T ax, ay, az, yaw;
         armor_pose(x, ax, ay, az, yaw);
         Eigen::Transform<T, 3, Eigen::Isometry> pose_in_odom;
@@ -221,18 +221,18 @@ struct Measure {
             img_pts_jet[std::to_underlying(auto_aim::ArmorKeyPointsIndex::RIGHT_BOTTOM)].y();
     }
 
-    void h(const VecX& x, VecZ& z) const {
+    inline void h(const VecX& x, VecZ& z) const {
         operator()(x.data(), z.data());
     }
 
     template<typename T>
-    T get_armor_r(const T x[X_N]) const {
+    inline T get_armor_r(const T x[X_N]) const {
         const bool use_lh = (ctx.armor_num == 4) && (ctx.id & 1);
         return use_lh ? x[idx::R] + x[idx::L] : x[idx::R];
     }
 
     template<typename T>
-    void armor_pose(const T x[X_N], T& ax, T& ay, T& az, T& yaw) const {
+    inline void armor_pose(const T x[X_N], T& ax, T& ay, T& az, T& yaw) const {
         yaw = normalize_angle(x[idx::YAW] + T(ctx.id) * T(2.0 * M_PI / ctx.armor_num));
 
         const bool outpost = (ctx.armor_number == auto_aim::ArmorClass::OUTPOST);
@@ -258,7 +258,7 @@ struct State {
     TimePoint timestamp;
     int frame_id = 0;
 
-    std::vector<Vec4> get_armors_xyza(auto_aim::ArmorClass armor_number) const {
+    inline std::vector<Vec4> get_armors_xyza(auto_aim::ArmorClass armor_number) const {
         std::vector<Vec4> r;
         int armor_num = armor_num_by_armor_class(armor_number);
         r.reserve(armor_num);
@@ -278,7 +278,7 @@ struct State {
         return r;
     }
 
-    std::vector<ISO3> get_armors_pose(auto_aim::ArmorClass armor_number) const {
+    inline std::vector<ISO3> get_armors_pose(auto_aim::ArmorClass armor_number) const {
         std::vector<ISO3> r;
         const double armor_pitch = (armor_number == auto_aim::ArmorClass::OUTPOST)
             ? -auto_aim::FIFTTEN_DEGREE_RAD
@@ -307,17 +307,17 @@ struct State {
         return r;
     }
 
-    void predict(const TimePoint& t, auto_aim::ArmorClass armor_number) {
+    inline void predict(const TimePoint& t, auto_aim::ArmorClass armor_number) {
         auto dt = std::chrono::duration<double>(t - timestamp).count();
         predict(dt, armor_number);
     }
-    void predict(double dt, auto_aim::ArmorClass armor_number) {
+    inline void predict(double dt, auto_aim::ArmorClass armor_number) {
         Predict p { .dt = dt, .armor_number = armor_number };
         p.f(x, x);
         timestamp +=
             std::chrono::duration_cast<TimePoint::duration>(std::chrono::duration<double>(dt));
     }
-    double get_armor_r(int id, auto_aim::ArmorClass armor_number) {
+    inline double get_armor_r(int id, auto_aim::ArmorClass armor_number) {
         Measure::Ctx ctx {
             .armor_num = armor_num_by_armor_class(armor_number),
             .id = id,
@@ -328,34 +328,34 @@ struct State {
         return m.get_armor_r(x.data());
     }
 
-    Vec3 pos() const noexcept {
+    inline Vec3 pos() const noexcept {
         return Vec3(x[idx::CX], x[idx::CY], x[idx::CZ]);
     }
 
-    Vec3 vel() const noexcept {
+    inline Vec3 vel() const noexcept {
         return Vec3(x[idx::VCX], x[idx::VCY], x[idx::VCZ]);
     }
 
-    double yaw() const noexcept {
+    inline double yaw() const noexcept {
         return x[idx::YAW];
     }
-    double vyaw() const noexcept {
+    inline double vyaw() const noexcept {
         return x[idx::VYAW];
     }
 
-    double r() const noexcept {
+    inline double r() const noexcept {
         return x[idx::R];
     }
-    double l() const noexcept {
+    inline double l() const noexcept {
         return x[idx::L];
     }
-    double h() const noexcept {
+    inline double h() const noexcept {
         return x[idx::H];
     }
-    double outpost01DZ() const noexcept {
+    inline double outpost01DZ() const noexcept {
         return x[idx::OUTPOST01DZ];
     }
-    double outpost02DZ() const noexcept {
+    inline double outpost02DZ() const noexcept {
         return x[idx::OUTPOST02DZ];
     }
 };
