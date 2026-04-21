@@ -14,7 +14,7 @@
 namespace awakening::auto_aim {
 constexpr double FIFTTEN_DEGREE_RAD = 15 * CV_PI / 180;
 enum class ArmorClass : int { SENTRY = 0, NO1, NO2, NO3, NO4, NO5, OUTPOST, BASE, UNKNOWN };
-enum class ArmorType : int { SimpleSmall, Large };
+enum class ArmorType : int { SimpleSmall, Large, BuildingSmall };
 template<ArmorType T>
 struct ArmorTypeTraits; // declare
 template<>
@@ -27,11 +27,16 @@ struct ArmorTypeTraits<ArmorType::Large> {
     static constexpr double WIDTH = 225.0 / 1000.0;
     static constexpr double HEIGHT = 50.0 / 1000.0;
 };
+template<>
+struct ArmorTypeTraits<ArmorType::BuildingSmall> {
+    static constexpr double WIDTH = 129.0 / 1000.0;
+    static constexpr double HEIGHT = 50.0 / 1000.0;
+};
 template<typename PointT, ArmorType T>
 struct ArmorKeyPoint3D {
     static constexpr double W = ArmorTypeTraits<T>::WIDTH;
     static constexpr double H = ArmorTypeTraits<T>::HEIGHT;
-    static std::vector<PointT> build() {
+    inline static std::vector<PointT> build() {
         return {
 
             PointT(0, W / 2, H / 2), // 左上
@@ -69,7 +74,7 @@ struct ArmorKeyPoints2D {
     using PointT = cv::Point2f;
     using I = ArmorKeyPointsIndex;
 
-    void add_offset(const PointT& offset) noexcept {
+    inline void add_offset(const PointT& offset) noexcept {
         for (auto& p_opt: points) {
             if (p_opt) {
                 *p_opt += offset;
@@ -81,7 +86,7 @@ struct ArmorKeyPoints2D {
         bbox.reset();
     }
 
-    void transform(const Eigen::Matrix<float, 3, 3>& transform_matrix) noexcept {
+    inline void transform(const Eigen::Matrix<float, 3, 3>& transform_matrix) noexcept {
         for (auto& p_opt: points) {
             if (p_opt) {
                 *p_opt = utils::transform_point2D(transform_matrix, *p_opt);
@@ -92,12 +97,12 @@ struct ArmorKeyPoints2D {
         full_points.reset();
         bbox.reset();
     }
-    void compute_mid(I mid, I top, I bottom) {
+    inline void compute_mid(I mid, I top, I bottom) {
         auto& mid_opt = points[std::to_underlying(mid)];
         mid_opt = (*points[std::to_underlying(top)] + *points[std::to_underlying(bottom)]) / 2.f;
     };
 
-    std::array<PointT, std::to_underlying(I::N)>& landmarks() {
+    inline std::array<PointT, std::to_underlying(I::N)>& landmarks() {
         if (!full_points) {
             // compute_mid(I::LEFT_MID, I::LEFT_TOP, I::LEFT_BOTTOM);
             // compute_mid(I::RIGHT_MID, I::RIGHT_TOP, I::RIGHT_BOTTOM);
@@ -113,7 +118,7 @@ struct ArmorKeyPoints2D {
 
         return *full_points;
     }
-    cv::Rect2f bounding_box() {
+    inline cv::Rect2f bounding_box() {
         if (!bbox.has_value()) {
             float min_x = std::numeric_limits<float>::max();
             float min_y = std::numeric_limits<float>::max();
@@ -149,14 +154,21 @@ private:
     std::optional<cv::Rect2f> bbox;
 };
 inline ArmorType armor_type_by_armor_class(ArmorClass armor_class) {
-    bool is_large = armor_class == ArmorClass::NO1;
-    return is_large ? ArmorType::Large : ArmorType::SimpleSmall;
+    if (armor_class == ArmorClass::NO1) {
+        return ArmorType::Large;
+    } else if (armor_class == ArmorClass::BASE || armor_class == ArmorClass::OUTPOST) {
+        return ArmorType::BuildingSmall;
+    } else {
+        return ArmorType::SimpleSmall;
+    }
 }
 template<typename PointT>
 inline std::vector<PointT> getArmorKeyPoints3D(ArmorClass armor_class) {
     auto armor_type = armor_type_by_armor_class(armor_class);
     if (armor_type == ArmorType::Large) {
         return ArmorKeyPoint3D<PointT, ArmorType::Large>::build();
+    } else if (armor_type == ArmorType::BuildingSmall) {
+        return ArmorKeyPoint3D<PointT, ArmorType::BuildingSmall>::build();
     } else {
         return ArmorKeyPoint3D<PointT, ArmorType::SimpleSmall>::build();
     }
@@ -249,13 +261,13 @@ struct Armor {
         }
         key_points.add_offset(offset);
     }
-    void transform(const Eigen::Matrix<float, 3, 3>& transform_matrix) {
+    inline void transform(const Eigen::Matrix<float, 3, 3>& transform_matrix) {
         if (!has_tidy) {
             throw std::runtime_error("transform called before tidy");
         }
         key_points.transform(transform_matrix);
     }
-    void draw(cv::Mat& img) {
+    inline void draw(cv::Mat& img) {
         if (!has_tidy)
             return;
 
@@ -300,7 +312,7 @@ struct Armor {
 
         cv::putText(img, text, text_org, font, scale, CV_color_by_armor_class(color), thickness);
     }
-    std::string get_str() const noexcept {
+    inline std::string get_str() const noexcept {
         return string_by_armor_color(color) + "_" + string_by_armor_class(number);
     }
     Armor() = default;
@@ -311,7 +323,7 @@ struct Armors {
     int frame_id = -1;
     std::vector<Armor> armors;
 
-    void draw(cv::Mat& img) {
+    inline void draw(cv::Mat& img) {
         for (auto& armor: armors) {
             armor.draw(img);
         }

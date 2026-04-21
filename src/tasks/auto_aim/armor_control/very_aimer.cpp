@@ -668,7 +668,10 @@ struct VeryAimer::Impl {
     double last_fly_time_;
     int last_select_;
     [[nodiscard]] GimbalCmd
-    very_aim(const ArmorTarget& _target, double bullet_speed, const AutoAimFsm& fsm) noexcept {
+    very_aim(const ArmorTarget& _target, double bullet_speed, AutoAimFsm fsm) noexcept {
+        if (_target.target_number == ArmorClass::BASE) {
+            fsm = AutoAimFsm::AIM_SINGLE_ARMOR;
+        }
         GimbalCmd cmd;
         bool is_same = _target.this_id == last_target_.this_id;
         double time_in_traj = 0.0;
