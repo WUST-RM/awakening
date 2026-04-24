@@ -320,7 +320,7 @@ struct State {
         timestamp +=
             std::chrono::duration_cast<TimePoint::duration>(std::chrono::duration<double>(dt));
     }
-    inline double get_armor_r(int id, auto_aim::ArmorClass armor_number) {
+    inline double get_armor_r(int id, auto_aim::ArmorClass armor_number) const {
         Measure::Ctx ctx {
             .armor_num = armor_num_by_armor_class(armor_number),
             .id = id,

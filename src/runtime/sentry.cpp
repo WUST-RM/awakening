@@ -14,6 +14,7 @@
     #include "_rcl/tf.hpp"
     #include "_rcl/visual/armor.hpp"
     #include "_rcl/visual/armor_target.hpp"
+    #include "_rcl/visual/arrow.hpp"
     #include "sensor_msgs/msg/camera_info.hpp"
     #include "sensor_msgs/msg/image.hpp"
     #include <rclcpp/qos.hpp>
@@ -28,7 +29,8 @@
 #include "tasks/auto_aim/debug.hpp"
 #include "tasks/auto_aim/type.hpp"
 #include "tasks/base/common.hpp"
-#include "tasks/base/packet_typedef.hpp"
+#include "tasks/base/packet_typedef_receive.hpp"
+#include "tasks/base/packet_typedef_send.hpp"
 #include "tasks/base/recorder_player..hpp"
 #include "tasks/base/web.hpp"
 #include "utils/buffer.hpp"
@@ -449,10 +451,9 @@ int main(int argc, char** argv) {
                 }
                 last_bullet_count = robo.bullet_count;
             }
-            auto sentry_opt = ReceiveSentryData::create(data);
+            auto sentry_opt = SentryJointState::create(data);
             if (sentry_opt.has_value()) {
                 auto sentry = sentry_opt.value();
-                sentry.update_log();
                 double big_yaw_in_world = sentry.big_yaw_in_world;
                 auto gimbal_2_gimbal_odom =
                     tf->pose_a_in_b(SentryFrame::GIMBAL, SentryFrame::GIMBAL_ODOM, Clock::now());
@@ -845,6 +846,19 @@ int main(int argc, char** argv) {
                 }
                 last_draw = debug_img;
             }
+#ifdef USE_ROS2
+            // auto old_in_big_yaw = tf->pose_a_in_b(
+            //     SentryFrame(target.get_target_state().frame_id),
+            //     SentryFrame::BIG_YAW,
+            //     Clock::now()
+            // );
+            // auto pos = old_in_big_yaw * target.get_target_state().pos();
+            // auto vel = old_in_big_yaw.linear() * target.get_target_state().vel();
+            // auto end = pos + vel;
+            // struct ARROW_TAG;
+            // rcl::pub_arrow<ARROW_TAG>("target_in_big_yaw", rcl_node, "gimbal_yaw", pos, end);
+
+#endif
         });
 #ifdef USE_ROS2
         s.add_rate_source<>("tf_pub", 100.0, [&]() {
@@ -859,13 +873,6 @@ int main(int argc, char** argv) {
             SendNavCmdData send;
 
             send.cmd_ID = SendNavCmdData::ID;
-            static auto start = std::chrono::steady_clock::now();
-
-            uint32_t t = std::chrono::duration_cast<std::chrono::microseconds>(
-                             std::chrono::steady_clock::now() - start
-            )
-                             .count();
-            send.time_stamp = t;
             send.vx = msg->linear.x;
             send.vy = msg->linear.y;
             send.wz = msg->angular.z;

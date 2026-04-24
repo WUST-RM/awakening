@@ -2,7 +2,8 @@
 #include "ascii_banner.hpp"
 #include "backward-cpp/backward.hpp"
 #include "geometry_msgs/msg/twist.hpp"
-#include "tasks/base/packet_typedef.hpp"
+#include "tasks/base/packet_typedef_receive.hpp"
+#include "tasks/base/packet_typedef_send.hpp"
 #include "utils/drivers/serial_driver.hpp"
 #include "utils/signal_guard.hpp"
 #include "utils/utils.hpp"
@@ -44,13 +45,6 @@ int main(int argc, char** argv) {
             SendNavCmdData send;
 
             send.cmd_ID = SendNavCmdData::ID;
-            static auto start = std::chrono::steady_clock::now();
-
-            uint32_t t = std::chrono::duration_cast<std::chrono::microseconds>(
-                             std::chrono::steady_clock::now() - start
-            )
-                             .count();
-            send.time_stamp = t;
             send.vx = msg->linear.x;
             send.vy = msg->linear.y;
             send.wz = msg->angular.z;

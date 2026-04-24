@@ -114,7 +114,7 @@ public:
     Measure::Ctx measure_ctx;
     std::optional<RobotStateESEKF> esekf;
     ArmorTrackerCfg cfg;
-    State get_target_state() const {
+    const State& get_target_state() const {
         return target_state;
     }
     template<typename F>

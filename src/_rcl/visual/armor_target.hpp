@@ -95,6 +95,11 @@ inline void pub_armor_target_marker(
                         auto_aim::ArmorTypeTraits<auto_aim::ArmorType::SimpleSmall>::WIDTH,
                         auto_aim::ArmorTypeTraits<auto_aim::ArmorType::SimpleSmall>::HEIGHT
                     );
+                case auto_aim::ArmorType::BuildingSmall:
+                    return std::make_pair(
+                        auto_aim::ArmorTypeTraits<auto_aim::ArmorType::BuildingSmall>::WIDTH,
+                        auto_aim::ArmorTypeTraits<auto_aim::ArmorType::BuildingSmall>::HEIGHT
+                    );
                 case auto_aim::ArmorType::Large:
                     return std::make_pair(
                         auto_aim::ArmorTypeTraits<auto_aim::ArmorType::Large>::WIDTH,
