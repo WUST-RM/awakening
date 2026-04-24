@@ -178,5 +178,6 @@ target_link_libraries(sentry
     ${PROJECT_NAME}_rcl
     ${PROJECT_NAME}_utils
     ${PROJECT_NAME}_auto_aim
+    ${PROJECT_NAME}_sentry_brain
 )
 endif()

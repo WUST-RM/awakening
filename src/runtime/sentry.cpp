@@ -3,6 +3,7 @@
 #include "tasks/auto_aim/armor_omni.hpp"
 #include "tasks/base/ballistic_trajectory.hpp"
 #include "tasks/base/wheel_odometry.hpp"
+#include "tasks/sentry_brain/rmuc_2026/mode_factory.hpp"
 #include <chrono>
 #include <cstdint>
 #include <memory>
@@ -235,6 +236,7 @@ int main(int argc, char** argv) {
     utils::OrderedQueue<auto_aim::Armors> armors_queue;
     utils::SWMR<auto_aim::ArmorTarget> armor_target;
     utils::SWMR<auto_aim::ArmorTarget> omni_armor_target;
+    auto brain = sentry_brain::create_brain_mode(rcl_node, rcl_tf, config["brain"]);
     armor_omni.emplace_one(
         config["armor_omni"]["camera0"],
         std::to_underlying(SentryFrame::OMNI_0),
@@ -373,9 +375,9 @@ int main(int argc, char** argv) {
                 }
                 last_bullet_count = robo.bullet_count;
             }
-            auto sentry_opt = SentryJointState::create(data);
-            if (sentry_opt.has_value()) {
-                auto sentry = sentry_opt.value();
+            auto joint_opt = SentryJointState::create(data);
+            if (joint_opt.has_value()) {
+                auto sentry = joint_opt.value();
                 double big_yaw_in_world = sentry.big_yaw_in_world;
                 auto gimbal_2_gimbal_odom =
                     tf->pose_a_in_b(SentryFrame::GIMBAL, SentryFrame::GIMBAL_ODOM, Clock::now());
@@ -392,6 +394,10 @@ int main(int argc, char** argv) {
                     Clock::now(),
                     big_yaw_2_gimbal_odom
                 );
+            }
+            auto referee_opt = SentryRefereeReceive::create(data);
+            if (referee_opt) {
+                brain->update_gobal_state(referee_opt.value());
             }
         });
     }
@@ -500,6 +506,21 @@ int main(int argc, char** argv) {
                 __armor_target.get_target_state().vyaw(),
                 __armor_target.jumped
             );
+            auto target_in_big_yaw = __armor_target;
+            auto old_in_big_yaw = tf->pose_a_in_b(
+                SentryFrame(target_in_big_yaw.get_target_state().frame_id),
+                SentryFrame::BIG_YAW,
+                target_in_big_yaw.get_target_state().timestamp
+            );
+            target_in_big_yaw.set_target_state([&](auto& s) {
+                auto pos = s.pos();
+                pos = old_in_big_yaw * pos;
+                auto vel = s.vel();
+                vel = old_in_big_yaw.linear() * vel;
+                s.set_pos(pos);
+                s.set_vel(vel);
+            });
+            brain->update_armor_target(target_in_big_yaw);
             armor_target.write(__armor_target);
 
             auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -546,6 +567,7 @@ int main(int argc, char** argv) {
             s.x[armor_point_motion_model::idx::VCZ] -= gimbal_odom_state_in_odom.vel().z();
         });
         target.this_id = old_this_id;
+
         GimbalCmd cmd {
             .appear = false,
         };

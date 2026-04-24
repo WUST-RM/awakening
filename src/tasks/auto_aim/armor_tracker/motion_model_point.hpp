@@ -330,11 +330,19 @@ struct State {
         };
         return m.get_armor_r(x.data());
     }
-
+    inline void set_pos(const Vec3& p) noexcept {
+        x[idx::CX] = p.x();
+        x[idx::CY] = p.y();
+        x[idx::CZ] = p.z();
+    }
     inline Vec3 pos() const noexcept {
         return Vec3(x[idx::CX], x[idx::CY], x[idx::CZ]);
     }
-
+    inline void set_vel(const Vec3& v) noexcept {
+        x[idx::VCX] = v.x();
+        x[idx::VCY] = v.y();
+        x[idx::VCZ] = v.z();
+    }
     inline Vec3 vel() const noexcept {
         return Vec3(x[idx::VCX], x[idx::VCY], x[idx::VCZ]);
     }

@@ -20,8 +20,10 @@ namespace awakening::sentry_brain {
 struct HomeMode::Impl {
     struct Params {
         double go_home_hp_ratio;
+        int home_bullet_num;
         void load(const YAML::Node& config) {
             go_home_hp_ratio = config["go_home_hp_ratio"].as<double>();
+            home_bullet_num = config["home_bullet_num"].as<int>();
         }
     } params_;
     Impl(rcl::RclcppNode& rcl_node, rcl::TF& rcl_tf, const YAML::Node& config):
@@ -111,8 +113,16 @@ struct HomeMode::Impl {
             AWAKENING_INFO("waiting for game start... current_time: {}", state_.current_game_time_);
             return;
         }
+        if (in_home()) {
+            state_.home_allowance_bullets_ = 0;
+        }
+        if (target_in_big_yaw_.check()) {
+            sentry_pose = GobalState::Pose::Attack;
+        }
         double cur_hp_ratio = double(state_.current_hp) / state_.max_hp;
         if (cur_hp_ratio < params_.go_home_hp_ratio || state_.current_hp < 60) {
+            auto tmp_pose = sentry_pose;
+            sentry_pose = GobalState::Pose::Defend;
             go<home_t>();
             wait_until(
                 [&]() {
@@ -125,7 +135,35 @@ struct HomeMode::Impl {
                 },
                 std::chrono::duration<double>(1.0)
             );
+            sentry_pose = tmp_pose;
+            return;
         }
+        if (state_.current_bullets_ < params_.home_bullet_num) {
+            auto tmp_pose = sentry_pose;
+            sentry_pose = GobalState::Pose::Move;
+            if (state_.home_allowance_bullets_ > 10) {
+                go<home_t>();
+            } else {
+                go<ally_fort_t>();
+            }
+            sentry_pose = tmp_pose;
+            return;
+        }
+        if (state_.current_game_time_ < 60) {
+            auto tmp_pose = sentry_pose;
+            sentry_pose = GobalState::Pose::Move;
+            go<enemy_fly_land_t>();
+            sentry_pose = tmp_pose;
+            return;
+        }
+        auto tmp_pose = sentry_pose;
+        sentry_pose = GobalState::Pose::Move;
+        go<ally_second_step_bottom_t>();
+        sentry_pose = tmp_pose;
+    }
+    bool in_home() {
+        auto& map = RMUC2026Map::instance();
+        return (current_pos_ - map.get<home_t>()).norm() < 0.5;
     }
     template<typename Key>
     bool wait_reached() {
@@ -158,6 +196,7 @@ struct HomeMode::Impl {
         msg.pose.position.z = current_goal_->z();
         goal_pub_->publish(msg);
     }
+    GobalState::Pose sentry_pose = GobalState::Pose::Attack;
     std::optional<Eigen::Vector3d> current_goal_;
     std::thread pub_goal_thread_;
     std::thread tick_thread_;

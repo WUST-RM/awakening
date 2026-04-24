@@ -251,7 +251,11 @@ int main(int argc, char** argv) {
                 if (!has) {
                     auto& msg = *_camera_info;
                     std::memcpy(camera_info.camera_matrix.data, msg.k.data(), 9 * sizeof(double));
-                    std::memcpy(camera_info.distortion_coefficients.data, msg.d.data(), msg.d.size() * sizeof(double));
+                    std::memcpy(
+                        camera_info.distortion_coefficients.data,
+                        msg.d.data(),
+                        msg.d.size() * sizeof(double)
+                    );
                     if (debug) {
                         auto_aim_dbg->camera_info_ = camera_info;
                     }
