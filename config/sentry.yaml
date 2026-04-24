@@ -392,3 +392,11 @@ uvc_camera_test:
         data: [1793.54229,    0.     ,  730.67194,    0.     ,
                   0.     , 1794.48784,  529.46193,    0.     ,
                   0.     ,    0.     ,    1.     ,    0.     ]
+
+
+
+sentry_brain:
+  mode: home
+  home: 
+    go_home_hp_ratio: 0.4
+    home_bullet_num: 10
