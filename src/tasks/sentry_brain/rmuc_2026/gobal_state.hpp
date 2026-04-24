@@ -32,7 +32,6 @@ public:
         }
     }
 
-private:
     void update_pose(Pose new_pose, int game_time) {
         if (new_pose != pose) {
             pose = new_pose;
@@ -92,19 +91,17 @@ private:
         last_change_pose_time_ = 0;
     }
 
-private:
     int current_hp = 0;
     int max_hp = 400;
     int current_game_time_ = -1;
     int fort_allowance_bullets_ = 0;
     int home_allowance_bullets_ = 0;
     int current_bullets_ = 0;
-
     int remain_rebuild_outpost_chance_ = 0;
-
     int ally_base_hp_ = 0;
     int ally_outpost_hp_ = 0;
 
+private:
     int last_min_ = 0;
     int last_ally_outpost_hp_ = 0;
     int last_base_hp_ = 5000;

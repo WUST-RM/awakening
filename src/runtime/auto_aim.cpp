@@ -209,7 +209,6 @@ int main(int argc, char** argv) {
             return 0;
         }
     }
-
     CameraInfo camera_info;
     camera_info.load(camera_config["camera_info"]);
     auto_aim::ArmorDetector armor_detector(config["armor_detector"]);
@@ -251,16 +250,9 @@ int main(int argc, char** argv) {
                 static bool has = false;
                 if (!has) {
                     auto& msg = *_camera_info;
-
-                    cv::Mat K(3, 3, CV_64F);
-                    std::memcpy(K.data, msg.k.data(), 9 * sizeof(double));
-
-                    cv::Mat D(1, msg.d.size(), CV_64F);
-                    std::memcpy(D.data, msg.d.data(), msg.d.size() * sizeof(double));
-                    camera_info.camera_matrix = K;
-                    camera_info.distortion_coefficients = D;
+                    std::memcpy(camera_info.camera_matrix.data, msg.k.data(), 9 * sizeof(double));
+                    std::memcpy(camera_info.distortion_coefficients.data, msg.d.data(), msg.d.size() * sizeof(double));
                     if (debug) {
-                        auto_aim_dbg.emplace();
                         auto_aim_dbg->camera_info_ = camera_info;
                     }
                     has = true;
@@ -301,7 +293,7 @@ int main(int argc, char** argv) {
         s.add_rate_source<>("get_sim_tf", 200.0, [&]() {
             if (use_sim) {
                 auto ros_now = rcl_node.rclcpp->now();
-                auto __tf = rcl_tf.lookup_transform("gimbal_link", "odom", ros_now);
+                auto __tf = rcl_tf.get_transform<double>("gimbal_link", "odom", ros_now);
                 if (__tf) {
                     ISO3 gimbal_in_gimbal_odom = ISO3::Identity();
                     gimbal_in_gimbal_odom.translation() = Vec3(0, 0, 0);

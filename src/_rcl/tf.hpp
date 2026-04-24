@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <rclcpp/clock.hpp>
+#include <rclcpp/duration.hpp>
 #include <rclcpp/node.hpp>
 #include <string>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
@@ -22,25 +23,108 @@ public:
         tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_, node_);
         tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(node_);
     }
-    std::optional<ISO3> lookup_transform(
-        const std::string& target_frame,
-        const std::string& source_frame,
-        rclcpp::Time time
-    ) {
-        ISO3 pose;
+    std::optional<tf2::Transform>
+    get_tf2_transform(const std::string& target, const std::string& source, rclcpp::Time t)
+        const noexcept {
         try {
-            auto tf =
-                tf_buffer_
-                    ->lookupTransform(target_frame, source_frame, time, tf2::durationFromSec(0.1));
-            pose.translation() << tf.transform.translation.x, tf.transform.translation.y,
-                tf.transform.translation.z;
-            auto q = tf.transform.rotation;
-            Eigen::Quaterniond Q(q.w, q.x, q.y, q.z);
-            pose.linear() = Q.toRotationMatrix();
+            auto tf_msg = tf_buffer_->lookupTransform(target, source, t);
+            tf2::Transform tf;
+            tf2::fromMsg(tf_msg.transform, tf);
+            return tf;
         } catch (tf2::TransformException& ex) {
+            RCLCPP_WARN(rclcpp::get_logger("tf"), "TF lookup failed: %s", ex.what());
             return std::nullopt;
         }
-        return pose;
+    }
+
+    std::optional<tf2::Transform> get_tf2_transform(
+        const std::string& target,
+        const std::string& source,
+        rclcpp::Time t,
+        const rclcpp::Duration& timeout
+    ) const noexcept {
+        try {
+            auto tf_msg = tf_buffer_->lookupTransform(target, source, t, timeout);
+            tf2::Transform tf;
+            tf2::fromMsg(tf_msg.transform, tf);
+            return tf;
+        } catch (tf2::TransformException& ex) {
+            RCLCPP_WARN(rclcpp::get_logger("tf"), "TF lookup failed: %s", ex.what());
+            return std::nullopt;
+        }
+    }
+
+    template<typename Scalar>
+    using Isometry3 = Eigen::Transform<Scalar, 3, Eigen::Isometry>;
+
+    template<typename Scalar>
+    static Isometry3<Scalar> tf2eigen(const geometry_msgs::msg::TransformStamped& tf) noexcept {
+        Isometry3<Scalar> T = Isometry3<Scalar>::Identity();
+
+        T.translation() << static_cast<Scalar>(tf.transform.translation.x),
+            static_cast<Scalar>(tf.transform.translation.y),
+            static_cast<Scalar>(tf.transform.translation.z);
+
+        const auto& q = tf.transform.rotation;
+        Eigen::Quaternion<Scalar> Q(
+            static_cast<Scalar>(q.w),
+            static_cast<Scalar>(q.x),
+            static_cast<Scalar>(q.y),
+            static_cast<Scalar>(q.z)
+        );
+
+        Q.normalize(); // 防止数值漂移
+        T.linear() = Q.toRotationMatrix();
+
+        return T;
+    }
+    template<typename Scalar>
+    static geometry_msgs::msg::Transform eigen2tf(const Isometry3<Scalar>& T) noexcept {
+        geometry_msgs::msg::Transform msg;
+
+        const auto& t = T.translation();
+        msg.translation.x = static_cast<double>(t.x());
+        msg.translation.y = static_cast<double>(t.y());
+        msg.translation.z = static_cast<double>(t.z());
+
+        Eigen::Quaternion<Scalar> q(T.rotation());
+        q.normalize();
+
+        msg.rotation.x = static_cast<double>(q.x());
+        msg.rotation.y = static_cast<double>(q.y());
+        msg.rotation.z = static_cast<double>(q.z());
+        msg.rotation.w = static_cast<double>(q.w());
+
+        return msg;
+    }
+
+    template<typename Scalar>
+    std::optional<Isometry3<Scalar>>
+    get_transform(const std::string& target, const std::string& source, rclcpp::Time t)
+        const noexcept {
+        try {
+            auto tf_msg = tf_buffer_->lookupTransform(target, source, t);
+            return tf2eigen<Scalar>(tf_msg);
+        } catch (tf2::TransformException& ex) {
+            RCLCPP_WARN(rclcpp::get_logger("tf"), "TF lookup failed: %s", ex.what());
+            return std::nullopt;
+        }
+    }
+
+    template<typename Scalar>
+    std::optional<Isometry3<Scalar>> get_transform(
+        const std::string& target,
+        const std::string& source,
+        rclcpp::Time t,
+        const rclcpp::Duration& timeout
+    ) const noexcept {
+        try {
+            auto tf_msg = tf_buffer_->lookupTransform(target, source, t, timeout);
+            return tf2eigen<Scalar>(tf_msg);
+        } catch (tf2::TransformException& ex) {
+            RCLCPP_WARN(rclcpp::get_logger("tf"), "TF lookup failed: %s", ex.what());
+            return std::nullopt;
+        }
     }
     template<typename FrameEnum, size_t N, bool Static, typename F>
     void pub_robot_tf(const utils::tf::RobotTF<FrameEnum, N, Static>& r_tf, F&& get_frame_name) {

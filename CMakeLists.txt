@@ -138,6 +138,13 @@ if(ROS2_FULL_FOUND)
     )
     ament_target_dependencies(${PROJECT_NAME}_rcl  ${ROS2_PACKAGES})
     target_compile_definitions(${PROJECT_NAME}_rcl  PUBLIC ${BUILD_DEFINITIONS})
+
+    file(GLOB_RECURSE SENTRY_BRAIN_SOURCES CONFIGURE_DEPENDS src/tasks/sentry_brain/*.cpp)
+    add_library(${PROJECT_NAME}_sentry_brain SHARED ${SENTRY_BRAIN_SOURCES})
+    target_link_libraries(${PROJECT_NAME}_sentry_brain
+        ${PROJECT_NAME}_rcl
+        ${PROJECT_NAME}_auto_aim 
+    )
 else()
     message(WARNING "ROS2 dependencies incomplete, skipping ROS2 targets ...")
 endif()
@@ -149,6 +156,7 @@ function(add_common_executable exe_name src_file)
 endfunction()
 add_common_executable(auto_aim src/runtime/auto_aim.cpp)
 add_common_executable(uvc_detect_test src/runtime/test/uvc_detect_test.cpp)
+
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_auto_aim
 )
@@ -158,7 +166,7 @@ target_link_libraries(uvc_detect_test
 if(ROS2_FULL_FOUND)
 add_common_executable(nav src/runtime/nav.cpp)
 add_common_executable(sentry src/runtime/sentry.cpp)
-
+add_common_executable(map_edit src/runtime/map_edit.cpp)
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_rcl
 )
