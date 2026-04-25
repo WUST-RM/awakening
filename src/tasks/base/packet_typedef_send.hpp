@@ -52,9 +52,10 @@ struct SendNavCmdData {
 struct SentryyRefereeSend {
     static constexpr uint8_t ID = 0x03;
     uint8_t set_current_pose; //1 为进攻姿态，2 为防御姿态，3 为移动姿态
-};
+} __attribute__((packed));
 struct SentryySendYUNTAISHOU {
     static constexpr uint8_t ID = 0x04;
     uint8_t user_data[30];
-};
+} __attribute__((packed));
+
 } // namespace awakening

@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Debug")
 
 message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}--------------------")
 
@@ -28,6 +28,8 @@ find_package(Ceres REQUIRED)
 find_package(HikSDK REQUIRED)
 find_package(TBB REQUIRED)
 find_package(spdlog REQUIRED)
+
+
 set(BUILD_DEFINITIONS "")
 set(BUILD_LIBS "")
 
@@ -91,6 +93,30 @@ add_library(${PROJECT_NAME}_auto_aim SHARED ${AUTO_AIM_SOURCES})
 target_link_libraries(${PROJECT_NAME}_auto_aim
      ${PROJECT_NAME}_utils
 )
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GSTREAMER REQUIRED 
+  gstreamer-1.0>=1.4 
+  gstreamer-app-1.0>=1.4
+)
+pkg_check_modules(AVUTIL REQUIRED libavutil)
+pkg_check_modules(AVCODEC REQUIRED libavcodec)
+pkg_check_modules(SWSCALE REQUIRED libswscale)
+
+file(GLOB_RECURSE BLIND_SOURCES CONFIGURE_DEPENDS src/tasks/eyes_of_blind/*.cpp)
+add_library(${PROJECT_NAME}_eyes_of_blind SHARED ${BLIND_SOURCES})
+target_include_directories(${PROJECT_NAME}_eyes_of_blind
+    PUBLIC
+    ${GSTREAMER_INCLUDE_DIRS}
+)
+target_link_libraries(${PROJECT_NAME}_eyes_of_blind
+     ${PROJECT_NAME}_utils
+     ${GSTREAMER_LIBRARY_DIRS}
+     ${AVUTIL_LIBRARIES}
+    ${AVCODEC_LIBRARIES}
+    ${SWSCALE_LIBRARIES}
+)
+
 
 set(ROS2_PACKAGES
     ament_cmake
@@ -156,12 +182,15 @@ function(add_common_executable exe_name src_file)
 endfunction()
 add_common_executable(auto_aim src/runtime/auto_aim.cpp)
 add_common_executable(uvc_detect_test src/runtime/test/uvc_detect_test.cpp)
-
+add_common_executable(blind_test src/runtime/test/blind_test.cpp)
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_auto_aim
 )
 target_link_libraries(uvc_detect_test
     ${PROJECT_NAME}_auto_aim
+)
+target_link_libraries(blind_test
+    ${PROJECT_NAME}_eyes_of_blind
 )
 if(ROS2_FULL_FOUND)
 add_common_executable(nav src/runtime/nav.cpp)

@@ -82,7 +82,7 @@ struct SentryJointState {
         std::memcpy(&out, data.data(), sizeof(out));
         return out;
     }
-};
+} __attribute__((packed));
 struct SentryRefereeReceive {
     static constexpr uint8_t ID = 0x05;
     uint8_t cmd_ID;
@@ -121,6 +121,6 @@ struct SentryRefereeReceive {
             j["ally_fort_occ_state"] = val(ally_fort_occ_state);
         });
     }
-};
+} __attribute__((packed));
 
 } // namespace awakening
