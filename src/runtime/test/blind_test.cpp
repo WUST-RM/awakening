@@ -67,12 +67,18 @@ int main(int argc, char** argv) {
                 while (true) {
                     if (encoder.try_pop_packet(pkg)) {
                         cv::Mat out;
+
                         decoder.push_packet(pkg);
-                        if (decoder.try_pop_frame(out)) {
-                            cv::namedWindow("Decoded Frame", cv::WINDOW_NORMAL);
-                            cv::imshow("Decoded Frame", out);
-                            cv::waitKey(1);
+                        while (true) {
+                            if (decoder.try_pop_frame(out)) {
+                                cv::namedWindow("Decoded Frame", cv::WINDOW_NORMAL);
+                                cv::imshow("Decoded Frame", out);
+                                cv::waitKey(1);
+                            } else {
+                                break;
+                            }
                         }
+
                     } else {
                         break;
                     }

@@ -1,11 +1,9 @@
 encoder:
   output_w: 300
   output_h: 300
-  output_fps: 30
-  target_bitrate: 115
-  bandwidth_limit_kbytes: 15.0
-  bandwidth_window_s: 1.0
-  max_tx_delay_s: 0.5
+  fps: 30
+  target_bitrate: 50
+  max_packets_per_sec: 30
 
   roi_w: 300
   roi_h: 300

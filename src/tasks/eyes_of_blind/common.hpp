@@ -7,8 +7,6 @@ static constexpr std::size_t MAX_PACKET_SIZE = 300;
 #pragma pack(push, 1)
 struct PacketHeader {
     uint64_t sequence_id;
-    uint16_t payload_size;
-    uint8_t frame_end;
 };
 #pragma pack(pop)
 

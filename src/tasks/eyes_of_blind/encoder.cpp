@@ -1,177 +1,388 @@
 #include "encoder.hpp"
+#include "utils/logger.hpp"
 
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
 #include <cstring>
-
 #include <mutex>
+#include <opencv2/opencv.hpp>
 #include <queue>
 #include <stdexcept>
 #include <vector>
 
-extern "C" {
-#include <libavcodec/avcodec.h>
-#include <libavutil/avutil.h> // 必须在这里！
-#include <libavutil/imgutils.h> // 必须在这里！
-#include <libavutil/opt.h>
-#include <libavutil/pixfmt.h>
-#include <libswscale/swscale.h>
-}
+#include <gst/app/gstappsink.h>
+#include <gst/app/gstappsrc.h>
+#include <gst/gst.h>
+#include <yaml-cpp/node/node.h>
 
 namespace awakening::eyes_of_blind {
 
 struct Encoder::Impl {
-    int in_w { 300 }, in_h { 256 };
-    int enc_w { 300 }, enc_h { 256 }; // 目标编码尺寸
-    int fps { 30 }, bitrate { 8000 }; // 修正比特率单位，通常为 bps
+    struct Params {
+        int out_w {}, out_h {}, fps {};
+        int target_bitrate {};
+        int roi_w {}, roi_h {};
+        int max_packets_per_sec = 30;
 
-    const AVCodec* codec { nullptr };
-    AVCodecContext* ctx { nullptr };
-    AVFrame* frame { nullptr };
-    AVPacket* pkt { nullptr };
-    SwsContext* sws { nullptr };
+        void load(const YAML::Node& config) {
+            out_w = config["output_w"].as<int>();
+            out_h = config["output_h"].as<int>();
+            fps = config["fps"].as<int>();
+            target_bitrate = config["target_bitrate"].as<int>();
+            roi_w = config["roi_w"].as<int>();
+            roi_h = config["roi_h"].as<int>();
 
-    std::mutex mtx;
-    std::queue<BlindSend> out_q;
+            if (config["max_packets_per_sec"])
+                max_packets_per_sec = config["max_packets_per_sec"].as<int>();
 
-    uint64_t seq { 0 };
-    int64_t pts { 0 };
-    bool stopped { false };
+            if (max_packets_per_sec <= 0)
+                max_packets_per_sec = 30;
+        }
+    } params_;
 
-    Impl() {
-        codec = avcodec_find_encoder_by_name("libx265");
-        if (!codec)
-            throw std::runtime_error("HEVC encoder not found");
+    struct TokenBucket {
+        double tokens = 0.0;
+        double rate = 30.0;
+        double capacity = 60.0;
+        int64_t last_ns = 0;
 
-        ctx = avcodec_alloc_context3(codec);
-        if (!ctx)
-            throw std::runtime_error("Failed to allocate codec context");
+        static int64_t now_ns() {
+            return std::chrono::duration_cast<std::chrono::nanoseconds>(
+                       std::chrono::steady_clock::now().time_since_epoch()
+            )
+                .count();
+        }
 
-        ctx->width = enc_w;
-        ctx->height = enc_h;
-        ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-        ctx->time_base = { 1, fps };
-        ctx->framerate = { fps, 1 };
-        ctx->bit_rate = bitrate;
-        ctx->gop_size = fps;
-        ctx->max_b_frames = 0;
-        ctx->thread_count = 1;
+        void init(double r, double cap) {
+            rate = r;
+            capacity = cap;
+            tokens = cap;
+            last_ns = 0;
+        }
 
-        av_opt_set(ctx->priv_data, "preset", "ultrafast", 0);
-        av_opt_set(ctx->priv_data, "tune", "zerolatency", 0);
+        bool consume(double n = 1.0) {
+            int64_t now = now_ns();
 
-        if (avcodec_open2(ctx, codec, nullptr) < 0)
-            throw std::runtime_error("Failed to open encoder");
+            if (last_ns == 0)
+                last_ns = now;
 
-        frame = av_frame_alloc();
-        pkt = av_packet_alloc();
+            double dt = (now - last_ns) / 1e9;
+            tokens = std::min(capacity, tokens + dt * rate);
+            last_ns = now;
 
-        frame->format = ctx->pix_fmt;
-        frame->width = ctx->width;
-        frame->height = ctx->height;
+            if (tokens < n)
+                return false;
 
-        if (av_frame_get_buffer(frame, 32) < 0)
-            throw std::runtime_error("Failed to allocate frame buffer");
+            tokens -= n;
+            return true;
+        }
+    };
+
+    TokenBucket bucket_;
+
+    GstElement* pipeline_ = nullptr;
+    GstElement* appsrc_ = nullptr;
+    GstElement* appsink_ = nullptr;
+    GstBus* bus_ = nullptr;
+
+    std::mutex pkg_mutex_;
+    std::condition_variable pkg_cv_;
+    std::deque<BlindSend> pkg_queue_;
+    size_t max_queue_packets_ = 0;
+
+    uint64_t packet_sequence_id_ = 0;
+
+    std::mutex buffer_mutex_;
+    std::vector<uint8_t> stream_buffer_;
+
+    Impl(const YAML::Node& config) {
+        params_.load(config);
+
+        bucket_.init(
+            params_.max_packets_per_sec,
+            params_.max_packets_per_sec * 2 
+        );
+
+        max_queue_packets_ = params_.max_packets_per_sec * 4;
+
+        initialize_gstreamer();
     }
 
     ~Impl() {
-        flush();
-        if (sws)
-            sws_freeContext(sws);
-        avcodec_free_context(&ctx);
-        av_frame_free(&frame);
-        av_packet_free(&pkt);
+        shutdown_gstreamer();
     }
 
-    void drain() {
-        while (avcodec_receive_packet(ctx, pkt) >= 0) {
-            int offset = 0;
-            while (offset < pkt->size) {
-                int chunk = std::min((int)PAYLOAD_SIZE, pkt->size - offset);
+    void initialize_gstreamer() {
+        gst_init(nullptr, nullptr);
 
-                BlindSend out {};
-                out.header.sequence_id = seq++;
-                out.header.payload_size = chunk;
-                out.header.frame_end = (offset + chunk == pkt->size);
+        pipeline_ = gst_pipeline_new("encoder_pipe");
+        appsrc_ = gst_element_factory_make("appsrc", "source");
+        appsink_ = gst_element_factory_make("appsink", "sink");
 
-                std::memcpy(out.data.data(), pkt->data + offset, chunk);
+        GstElement* convert = gst_element_factory_make("videoconvert", "convert");
+        GstElement* encoder = gst_element_factory_make("x264enc", "encoder");
+        GstElement* parser = gst_element_factory_make("h264parse", "parser");
 
-                out_q.push(std::move(out));
-                offset += chunk;
+        if (!pipeline_ || !appsrc_ || !appsink_ || !convert || !encoder || !parser) {
+            AWAKENING_ERROR("GStreamer element creation failed");
+            return;
+        }
+
+        GstCaps* caps = gst_caps_new_simple(
+            "video/x-raw",
+            "format",
+            G_TYPE_STRING,
+            "BGR",
+            "width",
+            G_TYPE_INT,
+            params_.out_w,
+            "height",
+            G_TYPE_INT,
+            params_.out_h,
+            "framerate",
+            GST_TYPE_FRACTION,
+            params_.fps,
+            1,
+            nullptr
+        );
+
+        g_object_set(
+            appsrc_,
+            "caps",
+            caps,
+            "stream-type",
+            0,
+            "format",
+            GST_FORMAT_TIME,
+            "is-live",
+            TRUE,
+            "block",
+            TRUE,
+            "do-timestamp",
+            TRUE,
+            nullptr
+        );
+
+        gst_caps_unref(caps);
+
+        g_object_set(
+            encoder,
+            "bitrate",
+            params_.target_bitrate,
+            "speed-preset",
+            10,
+            "tune",
+            0x00000004,
+            "byte-stream",
+            TRUE,
+            "key-int-max",
+            30,
+            "bframes",
+            0,
+            "rc-lookahead",
+            0,
+            "sync-lookahead",
+            0,
+            "sliced-threads",
+            TRUE,
+            "ref",
+            1,
+            "aud",
+            TRUE,
+            "option-string",
+            "repeat-headers=1:scenecut=0:force-cfr=1",
+            nullptr
+        );
+
+        g_object_set(parser, "config-interval", -1, "disable-passthrough", TRUE, nullptr);
+
+        GstCaps* h264_caps = gst_caps_new_simple(
+            "video/x-h264",
+            "stream-format",
+            G_TYPE_STRING,
+            "byte-stream",
+            "alignment",
+            G_TYPE_STRING,
+            "au",
+            nullptr
+        );
+
+        g_object_set(
+            appsink_,
+            "caps",
+            h264_caps,
+            "max-buffers",
+            5,
+            "drop",
+            FALSE,
+            "emit-signals",
+            FALSE,
+            "sync",
+            FALSE,
+            nullptr
+        );
+
+        gst_caps_unref(h264_caps);
+
+        gst_bin_add_many(GST_BIN(pipeline_), appsrc_, convert, encoder, parser, appsink_, nullptr);
+
+        if (!gst_element_link_many(appsrc_, convert, encoder, parser, appsink_, nullptr)) {
+            AWAKENING_ERROR("GStreamer pipeline link failed");
+            return;
+        }
+
+        gst_element_set_state(pipeline_, GST_STATE_PLAYING);
+        bus_ = gst_element_get_bus(pipeline_);
+    }
+
+    void shutdown_gstreamer() {
+        if (!pipeline_)
+            return;
+
+        gst_element_set_state(pipeline_, GST_STATE_NULL);
+
+        if (bus_) {
+            gst_object_unref(bus_);
+            bus_ = nullptr;
+        }
+
+        gst_object_unref(pipeline_);
+        pipeline_ = nullptr;
+        appsrc_ = nullptr;
+        appsink_ = nullptr;
+    }
+
+    void push_frame_to_gstreamer(const cv::Mat& frame) {
+        if (!appsrc_ || frame.empty())
+            return;
+
+        cv::Mat cont = frame.isContinuous() ? frame : frame.clone();
+        size_t size = cont.total() * cont.elemSize();
+
+        GstBuffer* buffer = gst_buffer_new_allocate(nullptr, size, nullptr);
+        if (!buffer)
+            return;
+
+        GstMapInfo map;
+        if (gst_buffer_map(buffer, &map, GST_MAP_WRITE)) {
+            std::memcpy(map.data, cont.data, size);
+            gst_buffer_unmap(buffer, &map);
+
+            gst_app_src_push_buffer(GST_APP_SRC(appsrc_), buffer);
+        } else {
+            gst_buffer_unref(buffer);
+        }
+    }
+
+    void pull_stream_and_packetize() {
+        if (!appsink_)
+            return;
+
+        constexpr size_t packet_bytes = PAYLOAD_SIZE;
+
+        while (true) {
+            GstSample* sample = gst_app_sink_try_pull_sample(GST_APP_SINK(appsink_), 0);
+
+            if (!sample)
+                break;
+
+            GstBuffer* buffer = gst_sample_get_buffer(sample);
+            if (!buffer) {
+                gst_sample_unref(sample);
+                continue;
             }
-            av_packet_unref(pkt);
+
+            GstMapInfo map;
+            if (gst_buffer_map(buffer, &map, GST_MAP_READ)) {
+                std::lock_guard<std::mutex> lock(buffer_mutex_);
+
+                size_t old = stream_buffer_.size();
+                stream_buffer_.resize(old + map.size);
+                std::memcpy(stream_buffer_.data() + old, map.data, map.size);
+
+                while (stream_buffer_.size() >= packet_bytes) {
+                    if (!bucket_.consume()) {
+                        break;
+                    }
+
+                    BlindSend pkt {};
+                    pkt.header.sequence_id = packet_sequence_id_++;
+
+                    std::memcpy(pkt.data.data(), stream_buffer_.data(), packet_bytes);
+
+                    {
+                        std::lock_guard<std::mutex> qlock(pkg_mutex_);
+                        if (pkg_queue_.size() < max_queue_packets_) {
+                            pkg_queue_.push_back(pkt);
+                        }
+                    }
+
+                    std::memmove(
+                        stream_buffer_.data(),
+                        stream_buffer_.data() + packet_bytes,
+                        stream_buffer_.size() - packet_bytes
+                    );
+
+                    stream_buffer_.resize(stream_buffer_.size() - packet_bytes);
+                }
+            }
+
+            gst_buffer_unmap(buffer, &map);
+            gst_sample_unref(sample);
         }
     }
 
-    void encode(const cv::Mat& img) {
-        if (stopped || img.empty())
-            return;
+    cv::Mat preprocess(const cv::Mat& frame) {
+        if (frame.empty())
+            return {};
 
-        int x = (img.cols - in_w) / 2;
-        int y = (img.rows - in_h) / 2;
-        auto roi = img(cv::Rect(x, y, in_w, in_h));
-        if (!sws || roi.cols != in_w || roi.rows != in_h) {
-            in_w = roi.cols;
-            in_h = roi.rows;
-            sws = sws_getCachedContext(
-                sws,
-                in_w,
-                in_h,
-                AV_PIX_FMT_BGR24,
-                enc_w,
-                enc_h,
-                AV_PIX_FMT_YUV420P,
-                SWS_BILINEAR,
-                nullptr,
-                nullptr,
-                nullptr
-            );
-        }
+        int roi_w = std::min(params_.roi_w, frame.cols);
+        int roi_h = std::min(params_.roi_h, frame.rows);
 
-        std::lock_guard<std::mutex> lk(mtx);
+        int x = (frame.cols - roi_w) / 2;
+        int y = (frame.rows - roi_h) / 2;
 
-        if (av_frame_make_writable(frame) < 0)
-            return;
+        cv::Mat roi = frame(cv::Rect(x, y, roi_w, roi_h));
 
-        const uint8_t* in_data[1] = { roi.data };
-        int in_linesize[1] = { (int)roi.step };
-        sws_scale(sws, in_data, in_linesize, 0, in_h, frame->data, frame->linesize);
-
-        frame->pts = pts++;
-
-        if (avcodec_send_frame(ctx, frame) >= 0) {
-            drain();
-        }
+        cv::Mat out;
+        cv::resize(roi, out, cv::Size(params_.out_w, params_.out_h));
+        return out;
     }
 
-    bool pop(BlindSend& out) {
-        std::lock_guard<std::mutex> lk(mtx);
-        if (out_q.empty())
+    void push_frame(const cv::Mat& frame) {
+        if (frame.empty())
+            return;
+
+        auto img = preprocess(frame);
+        push_frame_to_gstreamer(img);
+        pull_stream_and_packetize();
+    }
+
+    bool try_pop_packet(BlindSend& out) {
+        std::lock_guard<std::mutex> lock(pkg_mutex_);
+        if (pkg_queue_.empty())
             return false;
-        out = std::move(out_q.front());
-        out_q.pop();
-        return true;
-    }
 
-    void flush() {
-        std::lock_guard<std::mutex> lk(mtx);
-        if (stopped)
-            return;
-        stopped = true;
-        avcodec_send_frame(ctx, nullptr);
-        drain();
+        out = pkg_queue_.front();
+        pkg_queue_.pop_front();
+        pkg_cv_.notify_one();
+        return true;
     }
 };
 
-Encoder::Encoder(const YAML::Node&) {
-    _impl = std::make_unique<Impl>();
+Encoder::Encoder(const YAML::Node& config) {
+    _impl = std::make_unique<Impl>(config);
 }
+
 Encoder::~Encoder() = default;
+
 void Encoder::push_frame(const cv::Mat& frame) {
-    _impl->encode(frame);
+    _impl->push_frame(frame);
 }
+
 bool Encoder::try_pop_packet(BlindSend& out) {
-    return _impl->pop(out);
+    return _impl->try_pop_packet(out);
 }
 
 } // namespace awakening::eyes_of_blind

@@ -17,8 +17,6 @@ public:
 
     bool try_pop_frame(cv::Mat& out);
 
-    void reset();
-
 private:
     struct Impl;
     std::unique_ptr<Impl> _impl;
