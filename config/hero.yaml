@@ -95,7 +95,7 @@ camera:
       data: [1793.54229,    0.     ,  730.67194,    0.     ,
                 0.     , 1794.48784,  529.46193,    0.     ,
                 0.     ,    0.     ,    1.     ,    0.     ]
-    #12mm
+    #12mmqqqqqq
     # image_width: 1440
     # image_height: 1080
     # camera_name: narrow_stereo

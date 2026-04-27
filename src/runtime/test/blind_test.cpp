@@ -6,6 +6,7 @@
 #include "utils/logger.hpp"
 #include "utils/semaphore_guard.hpp"
 #include "utils/signal_guard.hpp"
+#include "utils/utils.hpp"
 #include <opencv2/core/mat.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/opencv.hpp>
@@ -33,7 +34,14 @@ int main(int argc, char** argv) {
     } else {
         return 1;
     }
+    Scheduler s;
     auto config = YAML::LoadFile(config_path);
+    std::unique_ptr<SerialDriver> serial;
+
+    if (config["serial"]["enable"].as<bool>()) {
+        serial = std::make_unique<SerialDriver>(config["serial"], s);
+    }
+
     auto camera_config = config["camera"];
     std::unique_ptr<HikCamera> camera;
     utils::SignalGuard::add_callback([&]() {
@@ -41,7 +49,7 @@ int main(int argc, char** argv) {
             camera->stop();
         }
     });
-    Scheduler s;
+
     camera = std::make_unique<HikCamera>(camera_config["hik_camera"], s);
     camera->init();
     if (!camera->running_) {
@@ -67,7 +75,9 @@ int main(int argc, char** argv) {
                 while (true) {
                     if (encoder.try_pop_packet(pkg)) {
                         cv::Mat out;
-
+                        if (serial) {
+                            serial->write(utils::to_vector(pkg));
+                        }
                         decoder.push_packet(pkg);
                         while (true) {
                             if (decoder.try_pop_frame(out)) {

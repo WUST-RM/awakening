@@ -189,7 +189,7 @@ template<Point2DLike T>
     const Eigen::Vector3f tp = H * hp;
     return { tp.x(), tp.y() };
 }
-inline cv::Rect2f transformRect(const Eigen::Matrix3f& H, const cv::Rect2f& rect) {
+inline cv::Rect2f transform_rect(const Eigen::Matrix3f& H, const cv::Rect2f& rect) {
     cv::Point2f p1(rect.x, rect.y);
     cv::Point2f p2(rect.x + rect.width, rect.y);
     cv::Point2f p3(rect.x, rect.y + rect.height);

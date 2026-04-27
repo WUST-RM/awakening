@@ -104,7 +104,8 @@ struct NetDetectorTensorrt::Impl {
 
             Ctx ctx;
             ctx.context.reset(engine_->createExecutionContext());
-            ctx.letter_box = std::make_shared<__cuda::LetterBox>(config_);
+            if (params_.use_cuda_preproces)
+                ctx.letter_box = std::make_shared<__cuda::LetterBox>(config_);
             TRT_CHECK(cudaMalloc(&ctx.device_buffers[input_idx_], input_sz_ * sizeof(float)));
             TRT_CHECK(cudaMalloc(&ctx.device_buffers[output_idx_], output_sz_ * sizeof(float)));
             ctx.output_buffer.resize(output_sz_);
@@ -189,19 +190,18 @@ struct NetDetectorTensorrt::Impl {
             return {};
         }
         OutPut output;
-        const float* cpu_blob_ptr;
+        cv::Mat blob;
         if (!params_.use_cuda_preproces) { // 最大化ctx利用率,该部分不需要ctx则暂时不请求c
             output.resized_img =
                 utils::letterbox(img, output.transform_matrix, config_.target_w, config_.target_h);
             auto swap_rb = format != config_.target_format;
-            const cv::Mat blob = cv::dnn::blobFromImage(
+            blob = cv::dnn::blobFromImage(
                 output.resized_img,
                 config_.preprocess_scale,
                 cv::Size(config_.target_w, config_.target_h),
                 cv::Scalar(0, 0, 0),
                 swap_rb
             );
-            cpu_blob_ptr = blob.ptr<float>();
         }
         {
             auto r = ctx_buffers_.acquire();
@@ -231,7 +231,7 @@ struct NetDetectorTensorrt::Impl {
             } else {
                 TRT_CHECK(cudaMemcpyAsync(
                     ctx.device_buffers[input_idx_],
-                    cpu_blob_ptr,
+                    blob.ptr<float>(),
                     input_sz_ * sizeof(float),
                     cudaMemcpyHostToDevice,
                     ctx.stream

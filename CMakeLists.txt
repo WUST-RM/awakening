@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14)
 cmake_policy(SET CMP0072 NEW)
-project(awakening LANGUAGES CXX)
+project(awakening LANGUAGES CXX C)
 
 
 set(CMAKE_CXX_STANDARD 23)
@@ -14,7 +14,9 @@ message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}-------
 
 option(BUILD_WITH_TRT      "Enable TensorRT backend"   ON)
 option(BUILD_WITH_OPENVINO "Enable OpenVINO backend"   ON)
-
+option(BUILD_SENTRY "Enable Sentry"   ON)
+option(BUILD_HERO "Enable Hero"   ON)
+option(BUILD_RADAR "Enable Radar"   ON)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake)
 
 
@@ -69,7 +71,7 @@ include_directories(${PROJECT_NAME}_utils PUBLIC
     ${CMAKE_BINARY_DIR}/src
     ${OpenCV_INCLUDE_DIRS}
 )
-file(GLOB_RECURSE UTILS_SOURCES CONFIGURE_DEPENDS src/utils/*.cpp)
+file(GLOB_RECURSE UTILS_SOURCES CONFIGURE_DEPENDS src/utils/*.cpp 3rdparty/*.cpp 3rdparty/*.c)
 if(BUILD_WITH_TRT)
     file(GLOB_RECURSE UTILS_CUDA_SOURCES CONFIGURE_DEPENDS src/utils/*.cu)
     list(APPEND UTILS_SOURCES ${UTILS_CUDA_SOURCES})
@@ -93,7 +95,7 @@ add_library(${PROJECT_NAME}_auto_aim SHARED ${AUTO_AIM_SOURCES})
 target_link_libraries(${PROJECT_NAME}_auto_aim
      ${PROJECT_NAME}_utils
 )
-
+if(BUILD_HERO)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GSTREAMER REQUIRED 
   gstreamer-1.0>=1.4 
@@ -110,13 +112,13 @@ target_include_directories(${PROJECT_NAME}_eyes_of_blind
     ${GSTREAMER_INCLUDE_DIRS}
 )
 target_link_libraries(${PROJECT_NAME}_eyes_of_blind
-     ${PROJECT_NAME}_utils
-     ${GSTREAMER_LIBRARY_DIRS}
-     ${AVUTIL_LIBRARIES}
+    ${PROJECT_NAME}_utils
+    ${GSTREAMER_LIBRARY_DIRS}
+    ${AVUTIL_LIBRARIES}
     ${AVCODEC_LIBRARIES}
     ${SWSCALE_LIBRARIES}
 )
-
+endif()
 
 set(ROS2_PACKAGES
     ament_cmake
@@ -164,13 +166,23 @@ if(ROS2_FULL_FOUND)
     )
     ament_target_dependencies(${PROJECT_NAME}_rcl  ${ROS2_PACKAGES})
     target_compile_definitions(${PROJECT_NAME}_rcl  PUBLIC ${BUILD_DEFINITIONS})
-
+    if(BUILD_SENTRY)
     file(GLOB_RECURSE SENTRY_BRAIN_SOURCES CONFIGURE_DEPENDS src/tasks/sentry_brain/*.cpp)
     add_library(${PROJECT_NAME}_sentry_brain SHARED ${SENTRY_BRAIN_SOURCES})
     target_link_libraries(${PROJECT_NAME}_sentry_brain
         ${PROJECT_NAME}_rcl
         ${PROJECT_NAME}_auto_aim 
     )
+    endif()
+    if(BUILD_RADAR)
+    find_package(small_gicp REQUIRED)
+    file(GLOB_RECURSE RADAR_DETECT_SOURCES CONFIGURE_DEPENDS src/tasks/radar_detect/*.cpp)
+    add_library(${PROJECT_NAME}_radar_detect SHARED ${RADAR_DETECT_SOURCES})
+    target_link_libraries(${PROJECT_NAME}_radar_detect
+        ${PROJECT_NAME}_utils
+        ${PROJECT_NAME}_rcl
+    )
+    endif()
 else()
     message(WARNING "ROS2 dependencies incomplete, skipping ROS2 targets ...")
 endif()
@@ -182,23 +194,34 @@ function(add_common_executable exe_name src_file)
 endfunction()
 add_common_executable(auto_aim src/runtime/auto_aim.cpp)
 add_common_executable(uvc_detect_test src/runtime/test/uvc_detect_test.cpp)
-add_common_executable(blind_test src/runtime/test/blind_test.cpp)
+
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_auto_aim
 )
 target_link_libraries(uvc_detect_test
     ${PROJECT_NAME}_auto_aim
 )
+if(BUILD_HERO)
+add_common_executable(blind_test src/runtime/test/blind_test.cpp)
 target_link_libraries(blind_test
     ${PROJECT_NAME}_eyes_of_blind
 )
+endif()
+if(BUILD_RADAR)
+add_common_executable(radar_detect src/runtime/radar_detect.cpp)
+target_link_libraries(radar_detect
+    ${PROJECT_NAME}_radar_detect
+)
+endif()
 if(ROS2_FULL_FOUND)
-add_common_executable(nav src/runtime/nav.cpp)
-add_common_executable(sentry src/runtime/sentry.cpp)
-add_common_executable(map_edit src/runtime/map_edit.cpp)
 target_link_libraries(auto_aim
     ${PROJECT_NAME}_rcl
 )
+if(BUILD_SENTRY)
+add_common_executable(nav src/runtime/nav.cpp)
+add_common_executable(sentry src/runtime/sentry.cpp)
+add_common_executable(map_edit src/runtime/map_edit.cpp)
+
 target_link_libraries(nav
     ${PROJECT_NAME}_rcl
     ${PROJECT_NAME}_utils
@@ -209,4 +232,5 @@ target_link_libraries(sentry
     ${PROJECT_NAME}_auto_aim
     ${PROJECT_NAME}_sentry_brain
 )
+endif()
 endif()

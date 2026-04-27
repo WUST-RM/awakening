@@ -1,0 +1,26 @@
+detector:
+  car_confidence_threshold: 0.2
+  armor_confidence_threshold: 0.2
+  armor_color_diff_threshold: 5
+  car:
+    model_path: /home/hy/radar_data/Horizon-Car-yolov8s-ghost-p2-2026-04-06.onnx
+    copy_context_num: 3
+    min_free_mem_ratio: 0.1
+    use_cuda_preproces: true
+  armor:
+    model_path: /home/hy/radar_data/Horizon-Armor-yolov8n-ghost-p2-2026-04-04.onnx
+    copy_context_num: 3
+    min_free_mem_ratio: 0.1
+    use_cuda_preproces: true
+
+lidar_driver:
+  batch_dot_num: 9600
+  dest_ip: "192.168.10.203"
+  udp_port: 50010
+  timeout_ms: 1000
+
+radar_cal:
+  source_in_target:
+    t: [0.2,0.0,0.0]
+    R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
+  target_pcd:

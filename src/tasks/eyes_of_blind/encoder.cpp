@@ -99,10 +99,7 @@ struct Encoder::Impl {
     Impl(const YAML::Node& config) {
         params_.load(config);
 
-        bucket_.init(
-            params_.max_packets_per_sec,
-            params_.max_packets_per_sec * 2 
-        );
+        bucket_.init(params_.max_packets_per_sec, params_.max_packets_per_sec * 2);
 
         max_queue_packets_ = params_.max_packets_per_sec * 4;
 
