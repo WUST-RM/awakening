@@ -12,8 +12,6 @@
 #include <optional>
 #include <utility>
 #include <vector>
-#include <wust_vl/common/drivers/serial_driver.hpp>
-
 namespace awakening {
 
 constexpr const char* TARGET_TOPIC = "vision_target";

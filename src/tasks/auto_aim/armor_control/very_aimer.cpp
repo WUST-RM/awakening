@@ -685,7 +685,10 @@ struct VeryAimer::Impl {
         target.set_target_state([&](armor_point_motion_model::State& state) {
             state.predict(Clock::now(), target.target_number);
         });
+        auto make_even = [](int x) { return x % 2 == 0 ? x : x + 1; };
 
+        const int horizon = make_even(params_.sample_horizon);
+        const double dt = params_.sample_total_time / horizon;
         if (!is_same) {
             auto hit_ctx_opt = get_hit(target, bullet_speed, fsm);
             if (!hit_ctx_opt) {
@@ -778,11 +781,6 @@ struct VeryAimer::Impl {
             limit_traj_cp0_ = cp0;
             limit_traj_.clear();
             aim_traj_.clear();
-
-            auto make_even = [](int x) { return x % 2 == 0 ? x : x + 1; };
-
-            const int horizon = make_even(params_.sample_horizon);
-            const double dt = params_.sample_total_time / horizon;
 
             limit_traj_.reserve(horizon + 1);
             aim_traj_.reserve(horizon + 1);
@@ -910,14 +908,20 @@ struct VeryAimer::Impl {
                        ))
                     < delay_enable.second;
             };
-
-            if (!delay_fire(+params_.control_delay)) {
-                cmd.no_shoot();
-            } else if (!cmd.fire_advice && delay_fire(-params_.control_delay)) {
-                cmd.fire_advice = true;
-                cmd.enable_yaw_diff = angles::from_degrees(params_.min_enable_yaw_deg);
-                cmd.enable_pitch_diff = angles::from_degrees(params_.min_enable_pitch_deg);
+            int step = params_.control_delay / (dt / 2.0);
+            for (int i = 1; i <= step; i++) {
+                double t_add = 0 + i * (dt / 2.0);
+                if (!delay_fire(+t_add)) {
+                    cmd.no_shoot();
+                }
             }
+            // if (!delay_fire(+params_.control_delay)) {
+            //     cmd.no_shoot();
+            // } else if (!cmd.fire_advice && delay_fire(-params_.control_delay)) {
+            //     cmd.fire_advice = true;
+            //     cmd.enable_yaw_diff = angles::from_degrees(params_.min_enable_yaw_deg);
+            //     cmd.enable_pitch_diff = angles::from_degrees(params_.min_enable_pitch_deg);
+            // }
         }
 
         return cmd;

@@ -84,7 +84,7 @@ armor_tracker:
   q_l: 0.0000001
   q_h: 0.0000001
   q_outpost_dz: 0.5
-  r_uv: 30.0
+  r_uv_at_1m: 100.0
   esekf_iter_num: 5
 
 auto_aim_fsm:
@@ -115,7 +115,7 @@ very_aimer:
 
   prediction_delay: 0.00
   aim_center_more_prediction_time: 0.0
-  comming_angle: 55
+  comming_angle: 70
   leaving_angle: 20
 
 

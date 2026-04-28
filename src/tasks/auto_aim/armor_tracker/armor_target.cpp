@@ -147,7 +147,7 @@ Eigen::Matrix<double, Z_N, Z_N>
 ArmorTarget::measurement_covariance(const Eigen::Matrix<double, Z_N, 1>& z) const noexcept {
     Eigen::Matrix<double, Z_N, Z_N> r;
 
-    double u_r = cfg.r_uv;
+    double u_r = cfg.r_uv_at_1m / target_state.pos().norm();
 
     r << u_r, 0, 0, 0, 0, 0, 0, 0, 0, u_r, 0, 0, 0, 0, 0, 0, 0, 0, u_r, 0, 0, 0, 0, 0, 0, 0, 0, u_r,
         0, 0, 0, 0, 0, 0, 0, 0, u_r, 0, 0, 0, 0, 0, 0, 0, 0, u_r, 0, 0, 0, 0, 0, 0, 0, 0, u_r, 0, 0,

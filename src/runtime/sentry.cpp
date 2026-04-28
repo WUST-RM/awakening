@@ -396,7 +396,7 @@ int main(int argc, char** argv) {
                 );
             }
             auto referee_opt = SentryRefereeReceive::create(data);
-            if (referee_opt) {
+            if (referee_opt && brain) {
                 brain->update_gobal_state(referee_opt.value());
             }
         });
@@ -520,7 +520,10 @@ int main(int argc, char** argv) {
                 s.set_pos(pos);
                 s.set_vel(vel);
             });
-            brain->update_armor_target(target_in_big_yaw);
+            if (brain) {
+                brain->update_armor_target(target_in_big_yaw);
+            }
+
             armor_target.write(__armor_target);
 
             auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

@@ -25,7 +25,7 @@ struct ArmorTrackerCfg {
     double q_l;
     double q_h;
     double q_outpost_dz;
-    double r_uv;
+    double r_uv_at_1m;
     void load(const YAML::Node& config) {
         esekf_iter_num = config["esekf_iter_num"].as<int>();
         lost_time_thres = config["lost_time_thres"].as<double>();
@@ -42,7 +42,7 @@ struct ArmorTrackerCfg {
         q_l = config["q_l"].as<double>();
         q_h = config["q_h"].as<double>();
         q_outpost_dz = config["q_outpost_dz"].as<double>();
-        r_uv = config["r_uv"].as<double>();
+        r_uv_at_1m = config["r_uv_at_1m"].as<double>();
     }
 };
 static inline int GOBAL_ID = 0;

@@ -89,19 +89,19 @@ armor_tracker:
   match_gate_not_all_init: 3000.0
   qxyz_common: [20.0, 20.0, 1.0]
   qyaw_common: 10.0
-  qxyz_output: [10.0, 10.0, 0.5]
+  qxyz_output: [1.0, 1.0, 0.5]
   qyaw_output: 0.01
   q_r: 0.0000001
   q_l: 0.0000001
   q_h: 0.0000001
   q_outpost_dz: 0.5
-  r_uv: 50.0
+  r_uv_at_1m: 100.0
   esekf_iter_num: 5
 
 auto_aim_fsm:
   single_whole_up: 1.5 
   single_whole_down: 1.0
-  whole_pair_up: 6.5 
+  whole_pair_up: 16.5 
   whole_pair_down: 7.5 #1s内至少换2次板子  2pi  否则轨迹规划无意义
   pair_center_up: 16.5
   pair_center_down: 15.0
@@ -109,8 +109,8 @@ auto_aim_fsm:
 
 
 very_aimer:
-  base_yaw_offset: -0.5
-  base_pitch_offset: -2.0
+  base_yaw_offset: -1.0
+  base_pitch_offset: -3.0
   # base_yaw_offset: -0.0
   # base_pitch_offset: -0.0
   sample_total_time: 1.0
@@ -126,10 +126,10 @@ very_aimer:
 
   prediction_delay: 0.00
   aim_center_more_prediction_time: 0.0
-  comming_angle: 55
+  comming_angle: 70
   leaving_angle: 20
 
-  yaw_limit_deg: 60
+
   shooting_range_h: 0.12
   shooting_range_w_small: 0.12
   shooting_range_w_large: 0.24
@@ -137,7 +137,7 @@ very_aimer:
   min_enable_yaw_deg: 0.25
   ballistic_trajectory:
     gravity: 9.8
-    resistance: 0.092
+    resistance: 0.001
 
 
 
@@ -395,7 +395,8 @@ uvc_camera_test:
 
 
 
-sentry_brain:
+brain:
+  enable: false
   mode: home
   home: 
     go_home_hp_ratio: 0.4

@@ -19,6 +19,7 @@
 #include <small_gicp/registration/registration.hpp>
 #include <small_gicp/util/downsampling_tbb.hpp>
 #include <small_gicp/util/normal_estimation_tbb.hpp>
+#include <thread>
 #include <vector>
 using namespace awakening;
 
@@ -72,6 +73,7 @@ int main(int argc, char** argv) {
     register_->rejector.max_dist_sq = 20.0;
     register_->optimizer.max_iterations = 999;
     std::vector<Eigen::Vector3f> source_points;
+    bool has_caled = false;
     auto pc_sub = rcl_node.make_sub<sensor_msgs::msg::PointCloud2>(
         "lidar",
         rclcpp::QoS(10),
@@ -119,7 +121,10 @@ int main(int argc, char** argv) {
     );
 
     std::thread([&]() { rcl_node.spin(); }).detach();
-    utils::SignalGuard::spin(std::chrono::milliseconds(1000));
+    // utils::SignalGuard::spin(std::chrono::milliseconds(1000));
+    while (!has_caled) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    }
     rcl_node.shutdown();
     return 0;
 }

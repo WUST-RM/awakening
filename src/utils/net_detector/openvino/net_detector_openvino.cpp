@@ -229,8 +229,7 @@ struct NetDetectorOpenVINO::Impl {
 
         const auto output_tensor = infer_buffer(input_tensor);
         const auto& shape = output_tensor.get_shape();
-
-        auto ptr = output_tensor.data<float>();
+        auto ptr = output_tensor.data<void>();
 
         if (shape.size() == 3) {
             output.output = cv::Mat(shape[1], shape[2], CV_32F, ptr).clone();

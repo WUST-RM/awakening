@@ -74,19 +74,17 @@ armor_detector:
 armor_tracker:
   lost_time_thres: 0.5
   tracking_thres: 10
-  max_yaw_diff_deg: 60.0
-  max_dis_diff: 3.0
   match_gate: 300.0
   match_gate_not_all_init: 3000.0
   qxyz_common: [20.0, 20.0, 1.0]
   qyaw_common: 10.0
-  qxyz_output: [10.0, 10.0, 0.5]
+  qxyz_output: [1.0, 1.0, 0.5]
   qyaw_output: 0.01
   q_r: 0.0000001
   q_l: 0.0000001
   q_h: 0.0000001
   q_outpost_dz: 0.5
-  r_uv: 30.0
+  r_uv_at_1m: 100.0
   esekf_iter_num: 5
 
 auto_aim_fsm:
@@ -117,10 +115,10 @@ very_aimer:
 
   prediction_delay: 0.00
   aim_center_more_prediction_time: 0.0
-  comming_angle: 55
+  comming_angle: 70
   leaving_angle: 20
 
-  yaw_limit_deg: 60
+
   shooting_range_h: 0.12
   shooting_range_w_small: 0.12
   shooting_range_w_large: 0.24
@@ -129,6 +127,7 @@ very_aimer:
   ballistic_trajectory:
     gravity: 9.8
     resistance: 0.001
+
 
 
 

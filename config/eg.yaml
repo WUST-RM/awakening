@@ -83,7 +83,7 @@ armor_tracker: #跟踪参数，没有把握就不改
   q_l: 0.0000001
   q_h: 0.0000001
   q_outpost_dz: 0.5
-  r_uv: 50.0
+  r_uv_at_1m: 50.0
   esekf_iter_num: 5
 
 auto_aim_fsm: #多种瞄准模式target vyaw控制阈值 single：目标速度小锁定较优板 whole： 锁定全部板 pair： 4选2 center：瞄准中心
@@ -125,7 +125,7 @@ very_aimer:
   min_enable_yaw_deg: 0.25
   ballistic_trajectory:
     gravity: 9.8
-    resistance: 0.092
+    resistance: 0.001
 
 
 

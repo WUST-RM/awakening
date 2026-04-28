@@ -45,7 +45,6 @@ else
 fi
 
 
-chmod 777 /dev/shm/debug_frame
 
 if [ "$1" == "rebuild" ]; then
     echo -e "${yellow}<--- Rebuilding: This will REMOVE the entire build directory --->${reset}"

@@ -20,7 +20,6 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
-#include <wust_vl/video/icamera.hpp>
 namespace awakening::auto_aim {
 struct ArmorDetector::Impl {
     static constexpr const char* OPENVINO = "openvino";
