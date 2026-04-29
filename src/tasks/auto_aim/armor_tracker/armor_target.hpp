@@ -15,8 +15,8 @@ struct ArmorTrackerCfg {
     int esekf_iter_num;
     double lost_time_thres;
     int tracking_thres;
-    double match_gate;
-    double match_gate_not_all_init;
+    double match_gate_at_1m;
+    double match_gate_not_all_init_at_1m;
     double qyaw_common;
     double qyaw_output;
     Vec3 qxyz_common;
@@ -30,8 +30,8 @@ struct ArmorTrackerCfg {
         esekf_iter_num = config["esekf_iter_num"].as<int>();
         lost_time_thres = config["lost_time_thres"].as<double>();
         tracking_thres = config["tracking_thres"].as<int>();
-        match_gate = config["match_gate"].as<double>();
-        match_gate_not_all_init = config["match_gate_not_all_init"].as<double>();
+        match_gate_at_1m = config["match_gate_at_1m"].as<double>();
+        match_gate_not_all_init_at_1m = config["match_gate_not_all_init_at_1m"].as<double>();
         qyaw_common = config["qyaw_common"].as<double>();
         qyaw_output = config["qyaw_output"].as<double>();
         auto qxyz_common_vec = config["qxyz_common"].as<std::vector<double>>();

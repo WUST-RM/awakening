@@ -151,7 +151,7 @@ if [[ "$1" == "build" || "$1" == "rebuild" || "$1" == "run" ]]; then
             fi
 
             echo -e "${yellow}Starting guard.sh ...${reset}"
-            # exec "$GUARD_SCRIPT" "$TARGET_PATH" "$@"
+            exec "$GUARD_SCRIPT" "$TARGET_PATH" "$@"
         fi
     fi
 

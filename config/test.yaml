@@ -74,8 +74,8 @@ armor_detector:
 armor_tracker:
   lost_time_thres: 0.5
   tracking_thres: 10
-  match_gate: 300.0
-  match_gate_not_all_init: 3000.0
+  match_gate_at_1m: 700.0
+  match_gate_not_all_init_at_1m: 7000.0
   qxyz_common: [20.0, 20.0, 1.0]
   qyaw_common: 10.0
   qxyz_output: [1.0, 1.0, 0.5]
@@ -84,7 +84,7 @@ armor_tracker:
   q_l: 0.0000001
   q_h: 0.0000001
   q_outpost_dz: 0.5
-  r_uv_at_1m: 100.0
+  r_uv_at_1m: 70.0
   esekf_iter_num: 5
 
 auto_aim_fsm:
