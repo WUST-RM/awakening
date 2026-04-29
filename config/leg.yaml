@@ -1,4 +1,4 @@
-enemy_color: blue
+enemy_color: red
 max_infer_num: 5
 bullet_speed: 23.0
 
@@ -8,8 +8,8 @@ serial:
   baud_rate: 115200
   char_size: 8
   read_buf_size: 4096
-serial_send_to_image_microseconds: 0
-use_sim: true
+serial_send_to_image_microseconds: 2500
+use_sim: false
 
 recorder:
   enable: false
@@ -19,7 +19,7 @@ player:
 
 tf:
   camera_in_gimbal:
-    t: [0.14,0.05,0.0]
+    t: [0.05,0.0,0.1]
     R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
   shoot_in_gimbal:
     t: [0.2,0.0,0.0]
@@ -39,7 +39,7 @@ auto_exposure:
   tolerance: 3.0
   step_gain: 15.0
   decay_step: 1.0
-  exposure_min: 100.0
+  exposure_min: 200.0
   exposure_max: 3500.0
   control_interval_ms: 300
 
@@ -74,7 +74,7 @@ armor_detector:
 armor_tracker:
   lost_time_thres: 0.5
   tracking_thres: 10
-  match_gate_at_1m: 700.0
+  match_gate_at_1m: 2000.0
   match_gate_not_all_init_at_1m: 7000.0
   qxyz_common: [20.0, 20.0, 1.0]
   qyaw_common: 10.0
@@ -99,14 +99,14 @@ auto_aim_fsm:
 
 very_aimer:
   base_yaw_offset: -1.0
-  base_pitch_offset: -3.0
+  base_pitch_offset: 1.0
   # base_yaw_offset: -0.0
   # base_pitch_offset: -0.0
   sample_total_time: 1.0
   
   sample_horizon: 200
 
-  control_delay: 0.2
+  control_delay: 0.1
   
   max_yaw_acc: 40
   #全向yaw加速度测算37
@@ -130,10 +130,9 @@ very_aimer:
 
 
 
-
 camera: 
   hik_camera:
-    target_sn: DA3038891
+    target_sn: DA3038934
     adc_bit_depth: Bits_8
     pixel_format: BayerRG8 #RGB8Packed
     reverse_x: false

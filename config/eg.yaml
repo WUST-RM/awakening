@@ -8,7 +8,7 @@ serial:
   baud_rate: 115200 #不用改
   char_size: 8
   read_buf_size: 4096
-
+serial_send_to_image_microseconds: 0
 use_sim: false #是否使用仿真
 
 recorder:

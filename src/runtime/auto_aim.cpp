@@ -43,6 +43,7 @@
 #include "utils/semaphore_guard.hpp"
 #include "utils/signal_guard.hpp"
 #include "utils/utils.hpp"
+#include "config.hpp"
 namespace backward {
 static backward::SignalHandling sh;
 }
@@ -154,9 +155,11 @@ int main(int argc, char** argv) {
     };
     bool debug = false;
     std::string config_path;
+    std::string robot_name;
     auto first_arg = get_arg(1);
     if (first_arg) {
-        config_path = first_arg.value();
+        robot_name = first_arg.value();
+        config_path = get_robot_config_path(robot_name).value_or(robot_name);
     } else {
         return 1;
     }
@@ -194,6 +197,7 @@ int main(int argc, char** argv) {
             serial = std::make_unique<SerialDriver>(config["serial"], s);
         }
     }
+    int serial_send_to_image_microseconds = config["serial_send_to_image_microseconds"].as<int>();
 
     auto camera_config = config["camera"];
     std::unique_ptr<HikCamera> camera;
@@ -366,7 +370,7 @@ int main(int argc, char** argv) {
                 auto robo = robo_opt.value();
 
                 std::chrono::time_point<std::chrono::steady_clock> packet_time =
-                    std::chrono::steady_clock::now();
+                    std::chrono::steady_clock::now() + std::chrono::microseconds(serial_send_to_image_microseconds);
                 double yaw = angles::from_degrees(robo.yaw);
                 double pitch = angles::from_degrees(robo.pitch);
                 double roll = angles::from_degrees(robo.roll);
@@ -437,7 +441,7 @@ int main(int argc, char** argv) {
                 auto& cfg = auto_exposure_cfg.value();
                 utils::dt_once(
                     [&]() {
-                        cv::Mat img = frame.img_frame.src_img(frame.expanded);
+                        cv::Mat img = frame.img_frame.src_img;
                         cv::Mat gray;
                         cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
                         const double brightness = cv::mean(gray)[0];

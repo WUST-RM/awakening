@@ -21,15 +21,11 @@ if [ "$EUID" -eq 0 ]; then
     COPY_BASHRC="$WORK_DIR/user_bashrc_copy.bash"
 
     if [ -f "$USER_HOME/.bashrc" ]; then
-        # 复制 bashrc 到 WORK_DIR，并删除前10行
         tail -n +11 "$USER_HOME/.bashrc" > "$COPY_BASHRC"
-        # 设置权限，普通用户可读
         chmod 644 "$COPY_BASHRC"
         chown $SUDO_USER:$SUDO_USER "$COPY_BASHRC"
 
         echo -e "${yellow}Copied ~/.bashrc to $COPY_BASHRC with first 10 lines removed${reset}"
-
-        # 加载复制的 bashrc
         source "$COPY_BASHRC"
         echo -e "${yellow}Loaded bashrc from copy${reset}"
     else
@@ -37,7 +33,6 @@ if [ "$EUID" -eq 0 ]; then
         source "$COPY_BASHRC"
     fi
 else
-    # 普通用户直接加载原 bashrc
     if [ -f "$HOME/.bashrc" ]; then
         source "$HOME/.bashrc"
         echo -e "${yellow}Loaded bashrc from $HOME/.bashrc${reset}"
@@ -84,7 +79,7 @@ if [[ "$1" == "build" || "$1" == "rebuild" || "$1" == "run" ]]; then
     fi
     SECONDS=0
     echo -e "${yellow}\n<--- Start Ninja Build --->${reset}"
-    ninja -C "$BUILD_DIR"
+    ninja -C "$BUILD_DIR" -j$(($(nproc)-1))
     if [ $? -ne 0 ]; then
         echo -e "${red}\n--- Ninja Build Failed ---${reset}"
         exit 1
