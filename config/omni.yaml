@@ -151,6 +151,14 @@ camera:
     trigger_activation: ""
     format: "bgr" 
     use_cuda_cvt: true
+  mv_camera:
+    frame_speed: 0
+    exposure_time: 2000
+    r_gain: 200
+    b_gain: 150
+    g_gain: 200
+    # analog_gain: 100.0
+    # gamma: 120
   camera_info:
     #8mm
     # image_width: 1440

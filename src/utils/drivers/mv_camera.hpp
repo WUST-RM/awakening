@@ -5,8 +5,11 @@
 #include "utils/scheduler/scheduler.hpp"
 #include <algorithm>
 #include <opencv2/core/types.hpp>
+#include <opencv2/opencv.hpp>
 #include <utility>
-
+#ifdef USE_TRT
+    #include "utils/cuda/cvtcolor.hpp"
+#endif
 namespace awakening {
 class MvCamera {
 public:
@@ -53,16 +56,22 @@ public:
 
                 const auto half_exposure =
                     std::chrono::microseconds(static_cast<long>(get_ExposureTime() / 2));
-                auto img = cv::Mat(
-                    cv::Size(head.iWidth, head.iHeight),
-                    head.uiMediaType == CAMERA_MEDIA_TYPE_MONO8 ? CV_8UC1 : CV_8UC3
-                );
-                CameraImageProcess(h_camera_, raw, img.data, &head);
+                auto img = cv::Mat(cv::Size(head.iWidth, head.iHeight), CV_8UC1, raw);
+                ImageFrame frame;
+#ifdef USE_TRT
+                if (use_cuda_cvt_) {
+                    static utils::__cuda::CvtColor cvt;
+                    cvt.process(img, frame.src_img, cv::COLOR_BayerRG2BGR);
+                } else {
+#endif
+                    cv::cvtColor(img, frame.src_img, cv::COLOR_BayerRG2BGR);
+#ifdef USE_TRT
+                }
+#endif
                 CameraReleaseImageBuffer(h_camera_, raw);
 
-                ImageFrame frame;
                 frame.timestamp = current_time - half_exposure;
-                frame.src_img = std::move(img);
+
                 frame.format = PixelFormat::BGR;
                 scheduler_.runtime_push_source<IO>(source_snapshot_id_, [f = std::move(frame)]() {
                     return std::make_tuple(std::optional<typename IO::second_type>(std::move(f)));
@@ -89,5 +98,6 @@ public:
     size_t source_snapshot_id_;
     std::thread daemon_thread_;
     Scheduler& scheduler_;
+    bool use_cuda_cvt_ = false;
 };
 } // namespace awakening

@@ -28,27 +28,35 @@ void MvCamera::init() {
     load(config_);
 }
 void MvCamera::load(const YAML::Node& config) {
-    initialize_camera();
+    if (!initialize_camera()) {
+        AWAKENING_ERROR("Failed to initialize camera");
+        return;
+    }
     CameraGetCapability(h_camera_, &t_capability_);
     CameraSetAeState(h_camera_, false);
     CameraSetIspOutFormat(h_camera_, CAMERA_MEDIA_TYPE_BGR8);
     CameraSetTriggerMode(h_camera_, 0);
+    int frame_speed = config["frame_speed"].as<int>();
+    CameraSetFrameSpeed(h_camera_, frame_speed);
     auto exposure_time = config["exposure_time"].as<double>();
     set_ExposureTime(exposure_time);
-    if(config["r_gain"]&&config["b_gain"]&&config["g_gain"]) {
+    if (config["r_gain"] && config["b_gain"] && config["g_gain"]) {
         auto r_gain = config["r_gain"].as<double>();
         auto b_gain = config["b_gain"].as<double>();
         auto g_gain = config["g_gain"].as<double>();
         set_rgb_gain(r_gain, b_gain, g_gain);
     }
-    if(config["analog_gain"]) {
+    if (config["analog_gain"]) {
         auto analog_gain = config["analog_gain"].as<double>();
         set_analog_gain(analog_gain);
     }
-    if(config["gamma"]) {
+    if (config["gamma"]) {
         auto gamma = config["gamma"].as<double>();
         set_gamma(gamma);
     }
+#ifdef USE_TRT
+    use_cuda_cvt_ = config["use_cuda_cvt"].as<bool>();
+#endif
 }
 void MvCamera::set_ExposureTime(double exposure_time) {
     double exposure_line_time;

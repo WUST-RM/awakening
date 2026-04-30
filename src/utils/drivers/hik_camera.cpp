@@ -5,7 +5,10 @@
 namespace awakening {
 void HikCamera::load(const YAML::Node& config) {
     std::string target_sn = config["target_sn"].as<std::string>();
-    initialize_camera(target_sn);
+    if (!initialize_camera(target_sn)) {
+        AWAKENING_ERROR("Failed to initialize camera with SN: {}", target_sn);
+        return;
+    }
     auto acquisition_frame_rate = config["acquisition_frame_rate"].as<double>();
     set_AcquisitionFrameRate(acquisition_frame_rate);
     auto exposure_time = config["exposure_time"].as<double>();

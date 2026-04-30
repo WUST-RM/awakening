@@ -133,7 +133,7 @@ very_aimer:
 
 camera: 
   hik_camera:
-    target_sn: DA3038891
+    target_sn: DA1094115
     adc_bit_depth: Bits_8
     pixel_format: BayerRG8 #RGB8Packed
     reverse_x: false
@@ -153,12 +153,14 @@ camera:
     format: "bgr" 
     use_cuda_cvt: true
   mv_camera:
+    frame_speed: 2
     exposure_time: 2000
     r_gain: 200
     b_gain: 150
     g_gain: 200
     # analog_gain: 100.0
     # gamma: 120
+    use_cuda_cvt: true
   camera_info:
     #8mm
     # image_width: 1440
