@@ -28,6 +28,7 @@ find_package(fmt REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(Ceres REQUIRED)
 find_package(HikSDK REQUIRED)
+find_package(MvSDK REQUIRED)
 find_package(TBB REQUIRED)
 find_package(spdlog REQUIRED)
 
@@ -80,6 +81,7 @@ add_library(${PROJECT_NAME}_utils SHARED ${UTILS_SOURCES})
 target_compile_definitions(${PROJECT_NAME}_utils PUBLIC ${BUILD_DEFINITIONS})
 target_link_libraries(${PROJECT_NAME}_utils
     HikSDK::HikSDK
+    MvSDK::MvSDK
     yaml-cpp
     fmt::fmt
     Eigen3::Eigen

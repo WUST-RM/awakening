@@ -325,9 +325,8 @@ std::vector<std::pair<int, Armor>> ArmorTarget::match(
     bool all_init =
         (outpost_has_all_and_has_set_ids.has_value() ? outpost_has_all_and_has_set_ids.value().first
                                                      : jumped);
-    const double GATE = (all_init ? cfg.match_gate_at_1m : cfg.match_gate_not_all_init_at_1m)
-       ;
-    
+    const double GATE = (all_init ? cfg.match_gate_at_1m : cfg.match_gate_not_all_init_at_1m);
+
     const double max_cost = 1e9;
     std::vector<std::vector<double>> cost(n_obs, std::vector<double>(armors_num, max_cost + 1));
 

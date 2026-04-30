@@ -8,8 +8,7 @@ namespace awakening {
 DEFINE_CONFIG_PATH(OMNI_CONFIG_PATH, "/config/omni.yaml")
 DEFINE_CONFIG_PATH(SENTRY_CONFIG_PATH, "/config/sentry.yaml")
 DEFINE_CONFIG_PATH(LEG_CONFIG_PATH, "/config/leg.yaml")
-inline std::optional<std::string> get_robot_config_path(std::string name)
-{
+inline std::optional<std::string> get_robot_config_path(std::string name) {
     auto key = utils::to_upper(name);
     if (key == "OMNI") {
         return std::string(OMNI_CONFIG_PATH);

@@ -21,6 +21,7 @@
     #include <rclcpp/qos.hpp>
 #endif
 #include "backward-cpp/backward.hpp"
+#include "config.hpp"
 #include "param_deliver.h"
 #include "tasks/auto_aim/armor_control/very_aimer.hpp"
 #include "tasks/auto_aim/armor_detect/armor_detector.hpp"
@@ -45,7 +46,6 @@
 #include "utils/semaphore_guard.hpp"
 #include "utils/signal_guard.hpp"
 #include "utils/utils.hpp"
-#include "config.hpp"
 namespace backward {
 static backward::SignalHandling sh;
 }
@@ -340,7 +340,8 @@ int main(int argc, char** argv) {
             if (robo_opt.has_value()) {
                 auto robo = robo_opt.value();
                 std::chrono::time_point<std::chrono::steady_clock> packet_time =
-                    std::chrono::steady_clock::now()+ std::chrono::microseconds(serial_send_to_image_microseconds);
+                    std::chrono::steady_clock::now()
+                    + std::chrono::microseconds(serial_send_to_image_microseconds);
                 double yaw = angles::from_degrees(robo.yaw);
                 double pitch = angles::from_degrees(robo.pitch);
                 double roll = angles::from_degrees(robo.roll);

@@ -3,13 +3,13 @@ max_infer_num: 5
 bullet_speed: 23.0
 
 serial:
-  enable: true
+  enable: false
   device_name: /dev/ttyACM0 
   baud_rate: 115200
   char_size: 8
   read_buf_size: 4096
 serial_send_to_image_microseconds: 0
-use_sim: true
+use_sim: false
 
 recorder:
   enable: false
@@ -152,6 +152,13 @@ camera:
     trigger_activation: ""
     format: "bgr" 
     use_cuda_cvt: true
+  mv_camera:
+    exposure_time: 2000
+    r_gain: 200
+    b_gain: 150
+    g_gain: 200
+    # analog_gain: 100.0
+    # gamma: 120
   camera_info:
     #8mm
     # image_width: 1440

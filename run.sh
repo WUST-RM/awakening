@@ -4,7 +4,6 @@ WORK_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 BUILD_DIR="$WORK_DIR/build"
 CONFIG_DIR="$WORK_DIR/config"
 BIN_DIR="$WORK_DIR/bin"
-source "$WORK_DIR/env.bash"
 export VISION_ROOT="$WORK_DIR"
 export MVCAM_SDK_PATH=/opt/MVS
 export MVCAM_COMMON_RUNENV=/opt/MVS/lib

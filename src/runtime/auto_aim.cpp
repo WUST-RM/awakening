@@ -2,6 +2,7 @@
 #include "tasks/auto_aim/armor_tracker/motion_model_point.hpp"
 #include "tasks/base/ballistic_trajectory.hpp"
 #include "tasks/base/wheel_odometry.hpp"
+#include "utils/drivers/mv_camera.hpp"
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -19,6 +20,7 @@
     #include <rclcpp/qos.hpp>
 #endif
 #include "backward-cpp/backward.hpp"
+#include "config.hpp"
 #include "param_deliver.h"
 #include "tasks/auto_aim/armor_control/very_aimer.hpp"
 #include "tasks/auto_aim/armor_detect/armor_detector.hpp"
@@ -43,7 +45,6 @@
 #include "utils/semaphore_guard.hpp"
 #include "utils/signal_guard.hpp"
 #include "utils/utils.hpp"
-#include "config.hpp"
 namespace backward {
 static backward::SignalHandling sh;
 }
@@ -200,14 +201,14 @@ int main(int argc, char** argv) {
     int serial_send_to_image_microseconds = config["serial_send_to_image_microseconds"].as<int>();
 
     auto camera_config = config["camera"];
-    std::unique_ptr<HikCamera> camera;
+    std::unique_ptr<MvCamera> camera;
     utils::SignalGuard::add_callback([&]() {
         if (camera) {
             camera->stop();
         }
     });
     if (!player && !use_sim) {
-        camera = std::make_unique<HikCamera>(camera_config["hik_camera"], s);
+        camera = std::make_unique<MvCamera>(camera_config["mv_camera"], s);
         camera->init();
         if (!camera->running_) {
             return 0;
@@ -370,7 +371,8 @@ int main(int argc, char** argv) {
                 auto robo = robo_opt.value();
 
                 std::chrono::time_point<std::chrono::steady_clock> packet_time =
-                    std::chrono::steady_clock::now() + std::chrono::microseconds(serial_send_to_image_microseconds);
+                    std::chrono::steady_clock::now()
+                    + std::chrono::microseconds(serial_send_to_image_microseconds);
                 double yaw = angles::from_degrees(robo.yaw);
                 double pitch = angles::from_degrees(robo.pitch);
                 double roll = angles::from_degrees(robo.roll);
