@@ -56,7 +56,7 @@ else
 fi
 current_time=$(date +%s)
 
-find "$WORK_DIR" -type f | while read file; do
+find "$WORK_DIR"/src -type f | while read file; do
   file_mod_time=$(stat --format=%Y "$file")
 
   if [ "$file_mod_time" -gt "$current_time" ]; then
@@ -78,7 +78,7 @@ if [[ "$1" == "build" || "$1" == "rebuild" || "$1" == "run" ]]; then
     fi
     SECONDS=0
     echo -e "${yellow}\n<--- Start Ninja Build --->${reset}"
-    ninja -C "$BUILD_DIR" -j$(($(nproc)-1)) -d explain -t restat
+    ninja -C "$BUILD_DIR" -j$(($(nproc)-1)) -d explain 
     if [ $? -ne 0 ]; then
         echo -e "${red}\n--- Ninja Build Failed ---${reset}"
         exit 1

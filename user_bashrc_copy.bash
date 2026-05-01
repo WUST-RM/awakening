@@ -257,3 +257,7 @@ export PATH=$JAVA_HOME/bin:$PATH
 source ~/acado/build/acado_env.sh
 
 source /usr/local/share/sentry_interfase/local_setup.bash
+
+
+
+export CMAKE_PREFIX_PATH=/home/hy/paho.mqtt.c:$CMAKE_PREFIX_PATH

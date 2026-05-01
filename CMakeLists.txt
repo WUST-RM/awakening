@@ -106,8 +106,23 @@ pkg_check_modules(GSTREAMER REQUIRED
 pkg_check_modules(AVUTIL REQUIRED libavutil)
 pkg_check_modules(AVCODEC REQUIRED libavcodec)
 pkg_check_modules(SWSCALE REQUIRED libswscale)
+find_package(Protobuf REQUIRED)
+set(PROTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/tasks/eyes_of_blind/proto")
+set(PROTO_FILES "${PROTO_DIR}/video_stream.proto")
+set(PROTO_BINARY_DIR "${CMAKE_BINARY_DIR}/proto_generated")
+file(MAKE_DIRECTORY ${PROTO_BINARY_DIR})
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
+include_directories(${CMAKE_BINARY_DIR})
+find_library(PAHO_MQTTPP_LIB NAMES paho-mqttpp3)
+find_library(PAHO_MQTT_C_LIB NAMES paho-mqtt3a paho-mqtt3c)
+if(PAHO_MQTTPP_LIB AND PAHO_MQTT_C_LIB)
+    message(STATUS "Paho MQTT C++ found: ${PAHO_MQTTPP_LIB}")
+else()
+    message(FATAL_ERROR "Paho MQTT C++ not found")
+endif()
 
 file(GLOB_RECURSE BLIND_SOURCES CONFIGURE_DEPENDS src/tasks/eyes_of_blind/*.cpp)
+list(APPEND BLIND_SOURCES ${PROTO_SRCS})
 add_library(${PROJECT_NAME}_eyes_of_blind SHARED ${BLIND_SOURCES})
 target_include_directories(${PROJECT_NAME}_eyes_of_blind
     PUBLIC
@@ -115,10 +130,13 @@ target_include_directories(${PROJECT_NAME}_eyes_of_blind
 )
 target_link_libraries(${PROJECT_NAME}_eyes_of_blind
     ${PROJECT_NAME}_utils
-    ${GSTREAMER_LIBRARY_DIRS}
+    ${GSTREAMER_LIBRARIES}
     ${AVUTIL_LIBRARIES}
     ${AVCODEC_LIBRARIES}
     ${SWSCALE_LIBRARIES}
+    ${Protobuf_LIBRARIES}
+    ${PAHO_MQTTPP_LIB}
+    ${PAHO_MQTT_C_LIB}
 )
 endif()
 

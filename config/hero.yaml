@@ -1,26 +1,27 @@
 encoder:
-  output_w: 300
-  output_h: 300
-  fps: 30
-  target_bitrate: 50
-  max_packets_per_sec: 30
+  # ----- 编码器参数 -----
+  fps: 30                       # 输出帧率
+  target_bitrate: 70           # 目标比特率（kbps）
+  max_packets_per_sec: 50       # 每秒最大包数（令牌桶速率）
 
-  roi_w: 300
-  roi_h: 300
-
-
-
-
-
-
-
-
-
-
+  # ----- 图像预处理参数 -----
+  crop_size: 350                # 中心裁剪区域大小
+  output_w: 300                 # 编码输出宽度
+  output_h: 300                 # 编码输出高度
+  static_simplify: true         # 开启动静分离
+  motion_threshold: 14          # 运动检测阈值
+  motion_erode_px: 2            # 腐蚀
+  motion_dilate_px: 6           # 膨胀
+  motion_trail_frames: 0        # 拖影历史帧数，0 表示关闭
+  trail_disable_motion_ratio: 0.01   # 拖影抑制运动比例阈值
+  bg_update_alpha: 0.01         # 背景更新速度
+  bg_blur_sigma: 0.1            # 静态模糊强度
+  center_clear_size: 200        # 中心保护区域尺寸
+  force_monochrome: false        # 仅中心保留彩色
 
 camera: 
   hik_camera:
-    target_sn: DA1094115
+    target_sn: DA2166432
     adc_bit_depth: Bits_8
     pixel_format: BayerRG8 #RGB8Packed
     reverse_x: false
@@ -122,6 +123,18 @@ camera:
     #   data: [3659.22949,    0.     ,  748.71496,    0.     ,
     #             0.     , 3652.02661,  556.81908,    0.     ,
     #             0.     ,    0.     ,    1.     ,    0.     ]
+serial:
+  enable: false
+  device_name: /dev/ttyACM0 
+  baud_rate: 115200
+  char_size: 8
+  read_buf_size: 4096
+
+mqtt:
+  enable: true
+  server: "tcp://127.0.0.1:3333"
+  client_id: "encoder_hero"
+  topic: "CustomByteBlock"
 
 
 

@@ -574,8 +574,8 @@ struct VeryAimer::Impl {
             return cp;
         }
         cp.valid = true;
-        cp.yaw = angles::normalize_angle(control_yaw + base_yaw_offset_rad_);
-        cp.pitch = pitch_opt.value() + base_pitch_offset_rad_;
+        cp.yaw = angles::normalize_angle(control_yaw + get_yaw_pitch_offset().first);
+        cp.pitch = pitch_opt.value() + get_yaw_pitch_offset().second;
         cp.aim_point.pose = ISO3::Identity();
         cp.aim_point.pose.translation() = p;
         cp.aim_point.d_angle = angles::shortest_angular_distance(control_yaw, armor_xyza[3]);
@@ -926,9 +926,19 @@ struct VeryAimer::Impl {
 
         return cmd;
     }
+    void set_operator_offset(std::pair<double, double> offset) {
+        operator_offset_ = offset;
+    }
+    std::pair<double, double> get_yaw_pitch_offset() const noexcept {
+        return std::make_pair(
+            base_yaw_offset_rad_ + operator_offset_.first,
+            base_pitch_offset_rad_ + operator_offset_.second
+        );
+    }
     BallisticTrajectory::Ptr ballistic_trajectory_;
     double base_yaw_offset_rad_;
     double base_pitch_offset_rad_;
+    std::pair<double, double> operator_offset_ = std::make_pair(0, 0);
 };
 VeryAimer::VeryAimer(const YAML::Node& config) {
     _impl = std::make_unique<Impl>(config);
@@ -941,6 +951,9 @@ VeryAimer::very_aim(const ArmorTarget& target, double bullet_speed, const AutoAi
     return _impl->very_aim(target, bullet_speed, fsm);
 }
 std::pair<double, double> VeryAimer::get_yaw_pitch_offset() {
-    return std::make_pair(_impl->base_yaw_offset_rad_, _impl->base_pitch_offset_rad_);
+    return _impl->get_yaw_pitch_offset();
+}
+void VeryAimer::set_operator_offset(std::pair<double, double> offset) {
+    _impl->set_operator_offset(offset);
 }
 } // namespace awakening::auto_aim

@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package doorlock_sniper;
+
+message CustomByteBlock {
+  bytes data = 1;   // 固定 300B
+}

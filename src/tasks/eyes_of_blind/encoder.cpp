@@ -1,6 +1,6 @@
 #include "encoder.hpp"
 #include "utils/logger.hpp"
-
+#include "image_preprocessor.hpp"
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
@@ -22,7 +22,6 @@ struct Encoder::Impl {
     struct Params {
         int out_w {}, out_h {}, fps {};
         int target_bitrate {};
-        int roi_w {}, roi_h {};
         int max_packets_per_sec = 30;
 
         void load(const YAML::Node& config) {
@@ -30,8 +29,6 @@ struct Encoder::Impl {
             out_h = config["output_h"].as<int>();
             fps = config["fps"].as<int>();
             target_bitrate = config["target_bitrate"].as<int>();
-            roi_w = config["roi_w"].as<int>();
-            roi_h = config["roi_h"].as<int>();
 
             if (config["max_packets_per_sec"])
                 max_packets_per_sec = config["max_packets_per_sec"].as<int>();
@@ -95,6 +92,7 @@ struct Encoder::Impl {
 
     std::mutex buffer_mutex_;
     std::vector<uint8_t> stream_buffer_;
+    std::unique_ptr<ImagePreprocessor> preprocessor_;
 
     Impl(const YAML::Node& config) {
         params_.load(config);
@@ -102,6 +100,8 @@ struct Encoder::Impl {
         bucket_.init(params_.max_packets_per_sec, params_.max_packets_per_sec * 2);
 
         max_queue_packets_ = params_.max_packets_per_sec * 4;
+
+        preprocessor_ = std::make_unique<ImagePreprocessor>(config);
 
         initialize_gstreamer();
     }
@@ -163,32 +163,67 @@ struct Encoder::Impl {
 
         gst_caps_unref(caps);
 
-        g_object_set(
-            encoder,
-            "bitrate",
-            params_.target_bitrate,
-            "speed-preset",
-            10,
-            "tune",
-            0x00000004,
-            "byte-stream",
-            TRUE,
-            "key-int-max",
-            30,
-            "bframes",
-            0,
-            "rc-lookahead",
-            0,
-            "sync-lookahead",
-            0,
-            "sliced-threads",
-            TRUE,
-            "ref",
-            1,
-            "aud",
-            TRUE,
+        // 画面清晰，延迟很高
+        // g_object_set(encoder,
+        //     "bitrate",         params_.target_bitrate,               // 目标码率
+        //     "speed-preset",     9,                 // veryslow
+        //     "tune",             1,                 // film:1
+        //     "bframes",          2,
+        //     "ref",              2,
+        //     "key-int-max",      60,               
+        //     "rc-lookahead",     10,
+        //     "sync-lookahead",   0,
+        //     "sliced-threads",   FALSE,             
+        //     "byte-stream",      TRUE,
+        //     "aud",              TRUE,
+        //     "option-string",
+        //     "repeat-headers=1:"
+        //     "force-cfr=1:"
+        //     "scenecut=40:"                     
+        //     "open-gop=0:"                      
+        //     "b-adapt=2:"
+        //     "me=umh:"
+        //     "me-range=32:"                     
+        //     "subme=7:"                        
+        //     "trellis=2:"
+        //     "deblock=0,0:"                     
+        //     "aq-mode=2:"
+        //     "aq-strength=1.2:"
+        //     "psy-rd=0.4,0.0:"
+        //     "qpmin=16:"
+        //     "qpmax=38",
+        //     nullptr
+        // );
+        
+        // 延迟较低，清晰度较差
+        g_object_set(encoder,
+            "bitrate",         params_.target_bitrate,               // 目标码率
+            "speed-preset",     9,                 // veryslow
+            "tune",             1,                 // zerolatency:0x00000004
+            "bframes",          0,
+            "ref",              5,
+            "key-int-max",      60,               
+            "rc-lookahead",     3,
+            "sync-lookahead",   0,
+            "sliced-threads",   FALSE,             
+            "byte-stream",      TRUE,
+            "aud",              TRUE,
             "option-string",
-            "repeat-headers=1:scenecut=0:force-cfr=1",
+            "repeat-headers=1:"
+            "force-cfr=1:"
+            "scenecut=40:"                     
+            "open-gop=0:"                      
+            "b-adapt=2:"
+            "me=hex:"
+            "me-range=32:"                     
+            "subme=7:"                        
+            "trellis=2:"
+            "deblock=0,0:"                     
+            "aq-mode=2:"
+            "aq-strength=1.2:"
+            "psy-rd=0.4,0.0:"
+            "qpmin=16:"
+            "qpmax=38",
             nullptr
         );
 
@@ -331,22 +366,12 @@ struct Encoder::Impl {
     }
 
     cv::Mat preprocess(const cv::Mat& frame) {
-        if (frame.empty())
-            return {};
+        if (!preprocessor_)
+            return frame;
 
-        int roi_w = std::min(params_.roi_w, frame.cols);
-        int roi_h = std::min(params_.roi_h, frame.rows);
-
-        int x = (frame.cols - roi_w) / 2;
-        int y = (frame.rows - roi_h) / 2;
-
-        cv::Mat roi = frame(cv::Rect(x, y, roi_w, roi_h));
-
-        cv::Mat out;
-        cv::resize(roi, out, cv::Size(params_.out_w, params_.out_h));
-        return out;
+        return preprocessor_->process(frame);
     }
-
+    
     void push_frame(const cv::Mat& frame) {
         if (frame.empty())
             return;

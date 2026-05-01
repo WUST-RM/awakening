@@ -12,6 +12,7 @@
 #include <opencv2/core/types.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/opencv.hpp>
 #include <opencv2/videoio.hpp>
 #include <optional>
 #include <yaml-cpp/node/parse.h>
@@ -66,13 +67,20 @@ int main(int argc, char** argv) {
     radar_detect::Detector detector(config["detector"]);
     s.register_task<CameraIO, CommonFrameIo>("push_common_frame", [&](CameraIO::second_type&& f) {
         static int current_id = 0;
-
+        // int x = (f.src_img.cols - std::min(f.src_img.cols, f.src_img.rows)) / 2;
+        // int y = (f.src_img.rows - std::min(f.src_img.cols, f.src_img.rows)) / 2;
+        // int w = std::min(f.src_img.cols, f.src_img.rows);
+        // int h = w;
+        int x = 0;
+        int y = 0;
+        int w = f.src_img.cols;
+        int h = f.src_img.rows;
         CommonFrame frame {
             .img_frame = std::move(f),
             .id = current_id++,
             .frame_id = 0,
-            .expanded = cv::Rect(0, 0, frame.img_frame.src_img.cols, frame.img_frame.src_img.rows),
-            .offset = cv::Point2f(0, 0),
+            .expanded = cv::Rect(x, y, w, h),
+            .offset = cv::Point2f(x, y),
         };
 
         return std::make_tuple(std::optional<CommonFrameIo::second_type>(std::move(frame)));
@@ -92,6 +100,7 @@ int main(int argc, char** argv) {
         std::cout << "cost : "
                   << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
                   << " ms" << std::endl;
+        cv::rectangle(img, frame.expanded, cv::Scalar(0, 255, 0), 3);
         for (const auto& car: cars) {
             car.draw(img);
         }

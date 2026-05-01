@@ -225,6 +225,7 @@ int main(int argc, char** argv) {
     BulletPickUp bullet_pick_up(config["bullet_pick_up"]);
     LogCtx log_ctx;
     std::optional<auto_aim::AutoAimDebugCtx> auto_aim_dbg;
+    std::pair<double, double> operator_offset = std::make_pair(0, 0);
     if (debug) {
         auto_aim_dbg.emplace();
         auto_aim_dbg->camera_info_ = camera_info;
@@ -386,6 +387,8 @@ int main(int argc, char** argv) {
                     packet_time,
                     gimbal_2_gimbal_odom
                 );
+                operator_offset.first = angles::from_degrees(robo.operator_yaw_offset);
+                operator_offset.second = angles::from_degrees(robo.operator_pitch_offset);
                 double vx = robo.v_x;
                 double vy = robo.v_y;
                 double vz = robo.v_z;
@@ -564,6 +567,7 @@ int main(int argc, char** argv) {
             .appear = false,
         };
         if (target.check()) {
+            very_aimer.set_operator_offset(operator_offset);
             cmd = very_aimer.very_aim(target, bullet_speed, auto_aim_fsm_controller.get_state());
         }
 

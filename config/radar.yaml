@@ -1,4 +1,4 @@
-max_infer_num: 5
+max_infer_num: 1
 detector:
   car_confidence_threshold: 0.2
   armor_confidence_threshold: 0.2

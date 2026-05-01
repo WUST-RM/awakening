@@ -14,5 +14,6 @@ public:
     [[nodiscard]] GimbalCmd
     very_aim(const ArmorTarget& target, double bullet_speed, const AutoAimFsm& fsm);
     std::pair<double, double> get_yaw_pitch_offset();
+    void set_operator_offset(std::pair<double, double> offset);
 };
 } // namespace awakening::auto_aim
