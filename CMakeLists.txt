@@ -117,6 +117,13 @@ set(PROTO_BINARY_DIR "${CMAKE_BINARY_DIR}/proto_generated")
 file(MAKE_DIRECTORY ${PROTO_BINARY_DIR})
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
 include_directories(${CMAKE_BINARY_DIR})
+find_library(PAHO_MQTTPP_LIB NAMES paho-mqttpp3)
+find_library(PAHO_MQTT_C_LIB NAMES paho-mqtt3a paho-mqtt3c)
+if(PAHO_MQTTPP_LIB AND PAHO_MQTT_C_LIB)
+    message(STATUS "Paho MQTT C++ found: ${PAHO_MQTTPP_LIB}")
+else()
+    message(FATAL_ERROR "Paho MQTT C++ not found")
+endif()
 
 file(GLOB_RECURSE BLIND_SOURCES CONFIGURE_DEPENDS src/tasks/eyes_of_blind/*.cpp)
 list(APPEND BLIND_SOURCES ${PROTO_SRCS})
@@ -132,6 +139,8 @@ target_link_libraries(${PROJECT_NAME}_eyes_of_blind
     ${AVCODEC_LIBRARIES}
     ${SWSCALE_LIBRARIES}
     ${Protobuf_LIBRARIES}
+    ${PAHO_MQTTPP_LIB}
+    ${PAHO_MQTT_C_LIB}
 )
 endif()
 

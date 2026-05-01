@@ -22,7 +22,6 @@ struct Encoder::Impl {
     struct Params {
         int out_w {}, out_h {}, fps {};
         int target_bitrate {};
-        int roi_w {}, roi_h {};
         int max_packets_per_sec = 30;
 
         void load(const YAML::Node& config) {
@@ -30,8 +29,6 @@ struct Encoder::Impl {
             out_h = config["output_h"].as<int>();
             fps = config["fps"].as<int>();
             target_bitrate = config["target_bitrate"].as<int>();
-            roi_w = config["roi_w"].as<int>();
-            roi_h = config["roi_h"].as<int>();
 
             if (config["max_packets_per_sec"])
                 max_packets_per_sec = config["max_packets_per_sec"].as<int>();
@@ -171,7 +168,7 @@ struct Encoder::Impl {
             "bitrate",
             params_.target_bitrate,
             "speed-preset",
-            10,
+            9,
             "tune",
             0x00000004,
             "byte-stream",

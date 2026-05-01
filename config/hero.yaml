@@ -5,7 +5,7 @@ encoder:
   max_packets_per_sec: 50       # 每秒最大包数（令牌桶速率）
 
   # ----- 图像预处理参数 -----
-  crop_size: 200                # 中心裁剪区域大小
+  crop_size: 300                # 中心裁剪区域大小
   output_w: 300                 # 编码输出宽度
   output_h: 300                 # 编码输出高度
   static_simplify: true         # 开启动静分离
@@ -124,11 +124,17 @@ camera:
     #             0.     , 3652.02661,  556.81908,    0.     ,
     #             0.     ,    0.     ,    1.     ,    0.     ]
 serial:
-  enable: true
+  enable: false
   device_name: /dev/ttyACM0 
   baud_rate: 115200
   char_size: 8
   read_buf_size: 4096
+
+mqtt:
+  enable: true
+  server: "tcp://127.0.0.1:3333"
+  client_id: "encoder_hero"
+  topic: "CustomByteBlock"
 
 
 
