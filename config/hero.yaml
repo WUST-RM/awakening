@@ -5,18 +5,18 @@ encoder:
   max_packets_per_sec: 50       # 每秒最大包数（令牌桶速率）
 
   # ----- 图像预处理参数 -----
-  crop_size: 300                # 中心裁剪区域大小
+  crop_size: 400                # 中心裁剪区域大小
   output_w: 300                 # 编码输出宽度
   output_h: 300                 # 编码输出高度
   static_simplify: true         # 开启动静分离
   motion_threshold: 14          # 运动检测阈值
   motion_erode_px: 2            # 腐蚀
   motion_dilate_px: 6           # 膨胀
-  motion_trail_frames: 10       # 拖影历史帧数，0 表示关闭
+  motion_trail_frames: 0        # 拖影历史帧数，0 表示关闭
   trail_disable_motion_ratio: 0.01   # 拖影抑制运动比例阈值
   bg_update_alpha: 0.01         # 背景更新速度
   bg_blur_sigma: 0.1            # 静态模糊强度
-  center_clear_size: 150        # 中心保护区域尺寸
+  center_clear_size: 200        # 中心保护区域尺寸
   force_monochrome: true        # 仅中心保留彩色
 
 camera: 
