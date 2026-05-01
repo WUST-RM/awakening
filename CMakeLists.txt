@@ -214,6 +214,14 @@ add_common_executable(radar_detect src/runtime/radar_detect.cpp)
 target_link_libraries(radar_detect
     ${PROJECT_NAME}_radar_detect
 )
+add_common_executable(livox_v1_driver src/runtime/livox_v1_driver.cpp)
+target_link_libraries(livox_v1_driver
+    ${PROJECT_NAME}_radar_detect
+)
+add_common_executable(radar_cal src/runtime/radar_cal.cpp)
+target_link_libraries(radar_cal
+    ${PROJECT_NAME}_radar_detect
+)
 endif()
 if(ROS2_FULL_FOUND)
 target_link_libraries(auto_aim

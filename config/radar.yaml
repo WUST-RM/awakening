@@ -1,3 +1,4 @@
+max_infer_num: 5
 detector:
   car_confidence_threshold: 0.2
   armor_confidence_threshold: 0.2
@@ -23,4 +24,119 @@ radar_cal:
   source_in_target:
     t: [0.2,0.0,0.0]
     R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
-  target_pcd:
+  target_pcd: /home/hy/radar_data/rmuc_2026_radar.pcd
+
+
+
+camera: 
+  hik_camera:
+    target_sn: 00J14461534
+    adc_bit_depth: Bits_8
+    pixel_format: BayerRG8 #RGB8Packed
+    reverse_x: false
+    reverse_y: false
+    width: 4000
+    height: 3036
+    offset_x: 0
+    offset_y: 0
+    acquisition_frame_rate_enable: false
+    acquisition_frame_rate: 30
+    exposure_time: 10000
+    gain: 16.9
+    gamma: 0.7 #Bayer用不了
+    trigger_mode: Off
+    trigger_source: ""
+    trigger_activation: ""
+    format: "bgr" 
+    use_cuda_cvt: true
+  mv_camera:
+    frame_speed: 0
+    exposure_time: 2000
+    r_gain: 200
+    b_gain: 150
+    g_gain: 200
+    # analog_gain: 100.0
+    # gamma: 120
+  camera_info:
+    #8mm
+    # image_width: 1440
+    # image_height: 1080
+    # camera_name: narrow_stereo
+    # camera_matrix:
+    #   rows: 3
+    #   cols: 3
+    #   data: [2419.64498,    0.     ,  719.05623,
+    #             0.     , 2414.38209,  538.71651,
+    #             0.     ,    0.     ,    1.     ]
+    # distortion_model: plumb_bob
+    # distortion_coefficients:
+    #   rows: 1
+    #   cols: 5
+    #   data: [-0.033521, 0.087954, -0.002045, -0.001438, 0.000000]
+    # rectification_matrix:
+    #   rows: 3
+    #   cols: 3
+    #   data: [1., 0., 0.,
+    #          0., 1., 0.,
+    #          0., 0., 1.]
+    # projection_matrix:
+    #   rows: 3
+    #   cols: 4
+    #   data: [2413.22632,    0.     ,  717.5196 ,    0.     ,
+    #             0.     , 2408.83228,  537.43444,    0.     ,
+    #             0.     ,    0.     ,    1.     ,    0.     ]
+    #6mm
+
+    image_width: 1440
+    image_height: 1080
+    camera_name: narrow_stereo
+    camera_matrix:
+      rows: 3
+      cols: 3
+      data: [1814.19888,    0.     ,  730.27359,
+                0.     , 1807.37177,  529.57031,
+                0.     ,    0.     ,    1.     ]
+    distortion_model: plumb_bob
+    distortion_coefficients:
+      rows: 1
+      cols: 5
+      data: [-0.089138, 0.114766, 0.000034, 0.000238, 0.000000]
+    rectification_matrix:
+      rows: 3
+      cols: 3
+      data: [1., 0., 0.,
+            0., 1., 0.,
+            0., 0., 1.]
+    projection_matrix:
+      rows: 3
+      cols: 4
+      data: [1793.54229,    0.     ,  730.67194,    0.     ,
+                0.     , 1794.48784,  529.46193,    0.     ,
+                0.     ,    0.     ,    1.     ,    0.     ]
+    #12mm
+    # image_width: 1440
+    # image_height: 1080
+    # camera_name: narrow_stereo
+    # camera_matrix:
+    #   rows: 3
+    #   cols: 3
+    #   data: [3655.11292,    0.     ,  748.66803,
+    #             0.     , 3648.34439,  556.97683,
+    #             0.     ,    0.     ,    1.     ]
+    # distortion_model: plumb_bob
+    # distortion_coefficients:
+    #   rows: 1
+    #   cols: 5
+    #   data: [-0.058763, 1.430269, 0.001191, 0.001641, 0.000000]
+    # rectification_matrix:
+    #   rows: 3
+    #   cols: 3
+    #   data: [1., 0., 0.,
+    #          0., 1., 0.,
+    #          0., 0., 1.]
+    # projection_matrix:
+    #   rows: 3
+    #   cols: 4
+    #   data: [3659.22949,    0.     ,  748.71496,    0.     ,
+    #             0.     , 3652.02661,  556.81908,    0.     ,
+    #             0.     ,    0.     ,    1.     ,    0.     ]

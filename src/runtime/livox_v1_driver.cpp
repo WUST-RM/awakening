@@ -22,6 +22,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     auto config = YAML::LoadFile(config_path);
+
     rcl::RclcppNode rcl_node("lidar_driver");
     livox_v1_lidar::LidarPublisher lidar(config["lidar_driver"], rcl_node);
     std::thread([&]() { rcl_node.spin(); }).detach();

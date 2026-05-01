@@ -69,7 +69,7 @@ armor_detector:
     label_path: ${ROOT_DIR}/model/label.txt
   color_classifier:
     enable: true
-    diff_threshold: 20.0
+    diff_threshold: 10.0
 
 armor_tracker:
   lost_time_thres: 0.5

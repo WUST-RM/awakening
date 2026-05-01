@@ -201,14 +201,14 @@ int main(int argc, char** argv) {
     int serial_send_to_image_microseconds = config["serial_send_to_image_microseconds"].as<int>();
 
     auto camera_config = config["camera"];
-    std::unique_ptr<MvCamera> camera;
+    std::unique_ptr<HikCamera> camera;
     utils::SignalGuard::add_callback([&]() {
         if (camera) {
             camera->stop();
         }
     });
     if (!player && !use_sim) {
-        camera = std::make_unique<MvCamera>(camera_config["mv_camera"], s);
+        camera = std::make_unique<HikCamera>(camera_config["hik_camera"], s);
         camera->init();
         if (!camera->running_) {
             return 0;
@@ -399,6 +399,7 @@ int main(int argc, char** argv) {
                     packet_time,
                     gimbal_odom_in_odom
                 );
+                enemy_color = EnemyColor(robo.detect_color);
                 robo.update_log();
                 static uint32_t last_bullet_count = 0;
                 if (robo.bullet_count > last_bullet_count) {

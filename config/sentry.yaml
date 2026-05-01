@@ -80,7 +80,7 @@ armor_detector:
     label_path: ${ROOT_DIR}/model/label.txt
   color_classifier:
     enable: true
-    diff_threshold: 20.0
+    diff_threshold: 10.0
 
 armor_tracker:
   lost_time_thres: 0.5
@@ -278,8 +278,8 @@ armor_omni:
   armor_tracker:
     lost_time_thres: 0.5
     tracking_thres: 3
-    match_gate: 500.0
-    match_gate_not_all_init: 3000.0
+    match_gate_at_1m: 500.0
+    match_gate_not_all_init_at_1m: 3000.0
     qxyz_common: [20.0, 20.0, 1.0]
     qyaw_common: 10.0
     qxyz_output: [10.0, 10.0, 0.5]
@@ -288,7 +288,7 @@ armor_omni:
     q_l: 0.0000001
     q_h: 0.0000001
     q_outpost_dz: 0.5
-    r_uv: 50.0
+    r_uv_at_1m: 50.0
     esekf_iter_num: 1
   camera0:
     uvc_camera:

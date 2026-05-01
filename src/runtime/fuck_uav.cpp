@@ -1,30 +1,45 @@
-#include "_rcl/node.hpp"
-#include "_rcl/tf.hpp"
 #include "ascii_banner.hpp"
+#include "backward-cpp/backward.hpp"
+#include "config.hpp"
+#include "param_deliver.h"
+#include "tasks/auto_aim/armor_tracker/motion_model_point.hpp"
+#include "tasks/base/ballistic_trajectory.hpp"
 #include "tasks/base/common.hpp"
-#include "tasks/radar_detect/detector.hpp"
+#include "tasks/base/packet_typedef_receive.hpp"
+#include "tasks/base/packet_typedef_send.hpp"
+#include "tasks/base/recorder_player..hpp"
+#include "tasks/base/web.hpp"
+#include "tasks/base/wheel_odometry.hpp"
+#include "utils/buffer.hpp"
 #include "utils/common/image.hpp"
 #include "utils/common/type_common.hpp"
 #include "utils/drivers/hik_camera.hpp"
+#include "utils/drivers/mv_camera.hpp"
+#include "utils/drivers/serial_driver.hpp"
 #include "utils/logger.hpp"
+#include "utils/runtime_tf.hpp"
+#include "utils/scheduler/scheduler.hpp"
+#include "utils/semaphore_guard.hpp"
 #include "utils/signal_guard.hpp"
-#include <iostream>
-#include <opencv2/core/types.hpp>
-#include <opencv2/highgui.hpp>
-#include <opencv2/imgcodecs.hpp>
-#include <opencv2/videoio.hpp>
+#include "utils/utils.hpp"
+#include <array>
+#include <chrono>
+#include <cstdint>
+#include <memory>
 #include <optional>
-#include <yaml-cpp/node/parse.h>
+#include <string>
+#include <utility>
+namespace backward {
+static backward::SignalHandling sh;
+}
 using namespace awakening;
 struct CameraTag {};
 struct SerialTag {};
-struct DetectTag {};
 struct FrameTag {};
 using CameraIO = IOPair<CameraTag, ImageFrame>;
 using SerialIO = IOPair<SerialTag, std::vector<uint8_t>>;
 using CommonFrameIo = IOPair<FrameTag, CommonFrame>;
-
-int main(int argc, char** argv) {
+int main(int argc, char* argv[]) {
     print_banner();
     auto& signal = utils::SignalGuard::instance();
     logger::init(spdlog::level::trace);
@@ -37,33 +52,34 @@ int main(int argc, char** argv) {
     };
     bool debug = false;
     std::string config_path;
+    std::string robot_name;
     auto first_arg = get_arg(1);
     if (first_arg) {
-        config_path = first_arg.value();
+        robot_name = first_arg.value();
+        config_path = get_robot_config_path(robot_name).value_or(robot_name);
     } else {
+        std::cout << "fuck" << std::endl;
         return 1;
     }
+    auto second_arg = get_arg(2);
+    if (second_arg) {
+        debug = second_arg.value() == "true";
+    }
     auto config = YAML::LoadFile(config_path);
-    auto camera_config = config["camera"];
     Scheduler s;
-    rcl::RclcppNode rcl_node("auto_aim");
-    rcl::TF rcl_tf(rcl_node);
-    std::unique_ptr<HikCamera> camera;
+    auto camera_config = config["camera"];
+    std::unique_ptr<MvCamera> camera;
     utils::SignalGuard::add_callback([&]() {
         if (camera) {
             camera->stop();
         }
     });
 
-    camera = std::make_unique<HikCamera>(camera_config["hik_camera"], s);
+    camera = std::make_unique<MvCamera>(camera_config["mv_camera"], s);
     camera->init();
     if (!camera->running_) {
         return 0;
     }
-    cv::namedWindow("Video Frame", cv::WINDOW_NORMAL);
-    cv::resizeWindow("Video Frame", 800, 600);
-
-    radar_detect::Detector detector(config["detector"]);
     s.register_task<CameraIO, CommonFrameIo>("push_common_frame", [&](CameraIO::second_type&& f) {
         static int current_id = 0;
 
@@ -80,38 +96,20 @@ int main(int argc, char** argv) {
     s.register_task<CommonFrameIo>("detector", [&](CommonFrameIo::second_type&& frame) {
         static std::unique_ptr<std::counting_semaphore<>> detector_sem;
         if (!detector_sem) {
-            detector_sem =
-                std::make_unique<std::counting_semaphore<>>(config["max_infer_num"].as<int>());
+            detector_sem = std::make_unique<std::counting_semaphore<>>(1);
         }
-        auto img = frame.img_frame.src_img;
-        auto start = Clock::now();
-        auto cars = detector.detect(frame);
 
-        std::cout << cars.size() << std::endl;
-        auto end = Clock::now();
-        std::cout << "cost : "
-                  << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count()
-                  << " ms" << std::endl;
-        for (const auto& car: cars) {
-            car.draw(img);
-        }
-        // Show the image with the progress bar
-        cv::imshow("Video Frame", img);
-        cv::waitKey(1);
         return;
     });
     if (camera) {
         camera->start<CameraTag>("hik");
     }
+
     s.build();
     s.run();
-    std::thread([&]() { rcl_node.spin(); }).detach();
 
     utils::SignalGuard::spin(std::chrono::milliseconds(1000));
     s.stop();
-
-    rcl_node.shutdown();
-    cv::destroyAllWindows();
 
     for (int i = 0; i < 10; ++i) {
         AWAKENING_CRITICAL("改了东西记得同步其他有关的exe的src");

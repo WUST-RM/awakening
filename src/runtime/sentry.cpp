@@ -368,6 +368,7 @@ int main(int argc, char** argv) {
                     packet_time,
                     gimbal_odom_in_odom
                 );
+                enemy_color = EnemyColor(robo.detect_color);
                 robo.update_log();
                 static uint32_t last_bullet_count = 0;
                 if (robo.bullet_count > last_bullet_count) {

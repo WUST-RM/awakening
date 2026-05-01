@@ -63,6 +63,7 @@ int main(int argc, char** argv) {
             small_gicp::KdTreeBuilderTBB()
         );
     } else {
+        std::cout << "aaa" << std::endl;
         return 1;
     }
     std::shared_ptr<
@@ -71,7 +72,7 @@ int main(int argc, char** argv) {
     register_ = std::make_shared<
         small_gicp::Registration<small_gicp::ICPFactor, small_gicp::ParallelReductionTBB>>();
     register_->rejector.max_dist_sq = 20.0;
-    register_->optimizer.max_iterations = 999;
+    register_->optimizer.max_iterations = 10;
     std::vector<Eigen::Vector3f> source_points;
     bool has_caled = false;
     auto pc_sub = rcl_node.make_sub<sensor_msgs::msg::PointCloud2>(
@@ -80,7 +81,7 @@ int main(int argc, char** argv) {
         [&](const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
             static auto start = Clock::now();
             auto now = Clock::now();
-            if (now - start < std::chrono::duration<double>(5.0)) {
+            if (now - start < std::chrono::duration<double>(1.0)) {
                 sensor_msgs::PointCloud2ConstIterator<float> iter_x(*msg, "x");
                 sensor_msgs::PointCloud2ConstIterator<float> iter_y(*msg, "y");
                 sensor_msgs::PointCloud2ConstIterator<float> iter_z(*msg, "z");

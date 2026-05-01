@@ -36,7 +36,7 @@ typedef struct {
 
 class LidarPublisher {
 private:
-    std::string frame_id;
+    std::string frame_id = "mid_70";
     boost::asio::io_context ctx;
     boost::asio::ip::address_v4 local_ip;
     boost::asio::ip::address_v4 dest_ip;
@@ -119,5 +119,13 @@ private:
 
 public:
     LidarPublisher(const YAML::Node& config, rcl::RclcppNode& node);
+    ~LidarPublisher() {
+        if (recv_thread.joinable()) {
+            recv_thread.join();
+        }
+        if (heartbeat_thread.joinable()) {
+            heartbeat_thread.join();
+        }
+    }
 };
 } // namespace awakening::livox_v1_lidar
