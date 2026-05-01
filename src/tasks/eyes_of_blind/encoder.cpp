@@ -163,34 +163,69 @@ struct Encoder::Impl {
 
         gst_caps_unref(caps);
 
-        g_object_set(
-            encoder,
-            "bitrate",
-            params_.target_bitrate,
-            "speed-preset",
-            9,
-            "tune",
-            0,
-            "byte-stream",
-            TRUE,
-            "key-int-max",
-            30,
-            "bframes",
-            0,
-            "rc-lookahead",
-            5,
-            "sync-lookahead",
-            0,
-            "sliced-threads",
-            TRUE,
-            "ref",
-            1,
-            "aud",
-            TRUE,
+        // 最清晰的参数，延迟很高
+        g_object_set(encoder,
+            "bitrate",         params_.target_bitrate,               // 目标码率
+            "speed-preset",     9,                 // veryslow
+            "tune",             1,                 // film
+            "bframes",          3,
+            "ref",              3,
+            "key-int-max",      60,               
+            "rc-lookahead",     20,
+            "sync-lookahead",   0,
+            "sliced-threads",   FALSE,             
+            "byte-stream",      TRUE,
+            "aud",              TRUE,
             "option-string",
-            "repeat-headers=1:scenecut=0:force-cfr=1",
+            "repeat-headers=1:"
+            "force-cfr=1:"
+            "scenecut=40:"                     
+            "open-gop=0:"                      
+            "b-adapt=2:"
+            "me=umh:"
+            "me-range=32:"                     
+            "subme=7:"                        
+            "trellis=2:"
+            "deblock=0,0:"                     
+            "aq-mode=2:"
+            "aq-strength=1.2:"
+            "psy-rd=0.4,0.0:"
+            "qpmin=16:"
+            "qpmax=38",
             nullptr
         );
+        
+        // 清晰度基本不变，延迟低一点
+        // g_object_set(encoder,
+        //     "bitrate",         params_.target_bitrate,               // 目标码率
+        //     "speed-preset",     9,                 // veryslow
+        //     "tune",             1,                 // film 
+        //     "bframes",          2,
+        //     "ref",              3,
+        //     "key-int-max",      60,               
+        //     "rc-lookahead",     20,
+        //     "sync-lookahead",   0,
+        //     "sliced-threads",   FALSE,             
+        //     "byte-stream",      TRUE,
+        //     "aud",              TRUE,
+        //     "option-string",
+        //     "repeat-headers=1:"
+        //     "force-cfr=1:"
+        //     "scenecut=40:"                     
+        //     "open-gop=0:"                      
+        //     "b-adapt=2:"
+        //     "me=hex:"
+        //     "me-range=32:"                     
+        //     "subme=7:"                        
+        //     "trellis=2:"
+        //     "deblock=0,0:"                     
+        //     "aq-mode=2:"
+        //     "aq-strength=1.2:"
+        //     "psy-rd=0.4,0.0:"
+        //     "qpmin=16:"
+        //     "qpmax=38",
+        //     nullptr
+        // );
 
         g_object_set(parser, "config-interval", -1, "disable-passthrough", TRUE, nullptr);
 
