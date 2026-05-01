@@ -111,15 +111,12 @@ fi
 
 
 
+buildme()
+{
+colcon build --symlink-install --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+}
 
-
-export PATH="/usr/local/opt/llvm/bin:$PATH"
-
-export LD_LIBRARY_PATH=/usr/lib
-#export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-
-
-
+export PATH=$PATH:/usr/local/git/bin
 
 
 
@@ -127,133 +124,59 @@ export LD_LIBRARY_PATH=/usr/lib
 
 
 
+export MVCAM_SDK_PATH=/opt/MVS
 
-#export MVCAM_SDK_PATH=/opt/MVS
+export MVCAM_COMMON_RUNENV=/opt/MVS/lib
 
-#export MVCAM_COMMON_RUNENV=/opt/MVS/lib
+export MVCAM_GENICAM_CLPROTOCOL=/opt/MVS/lib/CLProtocol
 
-#export MVCAM_GENICAM_CLPROTOCOL=/opt/MVS/lib/CLProtocol
+export ALLUSERSPROFILE=/opt/MVS/MVFG
+export LD_LIBRARY_PATH=/opt/MVS/lib/64:/opt/MVS/lib/32:$LD_LIBRARY_PATH
 
-#export ALLUSERSPROFILE=/opt/MVS/MVFG
-#export LD_LIBRARY_PATH=/opt/MVS/lib/64:/opt/MVS/lib/32:$LD_LIBRARY_PATH
-
-
-
+export CUDAToolkit_ROOT=/usr/local/cuda
 
 
+# ==== TensorRT & CUDA 环境变量 ====
+export TENSORRT_DIR="/opt/TensorRT/TensorRT-8.5.3.1"
+export CUDA_DIR="/usr/local/cuda"
+
+export PATH="$CUDA_DIR/bin:$TENSORRT_DIR/bin:$PATH"
+export LD_LIBRARY_PATH="$TENSORRT_DIR/lib:$CUDA_DIR/lib64:$LD_LIBRARY_PATH"
+export CPATH="$TENSORRT_DIR/include:$CPATH"
+
+export G2O_DIR="/usr/local/lib/cmake/g2o"
+# ==== 环境变量设置结束 ====
 
 
-export PATH=/usr/local/cuda-12.6/bin:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:$LD_LIBRARY_PATH
-
-
-export CUDA_HOME=/usr/local/cuda-12.6
-#export CUDNN_HOME=/usr/local/cuda-11.8
-export PATH=$CUDA_HOME/bin:$PATH
-export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-
-#export ROS_DOMAIN_ID=12
-
-
-#export PATH=$PATH:/usr/local/cuda-11.8/bin
-#export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-11.8/lib64
-
-
-
-
-
-
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/hy/TensorRT-10.6.0.26/lib
-export PATH=/home/hy/TensorRT-10.6.0.26/bin:$PATH
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-
-
-
-#source /home/hy/acado/build/acado_env.sh
-export PATH=/home/hy/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi/bin:$PATH
-
-# >>> xmake >>>
-test -f "/home/hy/.xmake/profile" && source "/home/hy/.xmake/profile"
-# <<< xmake <<<
 
 # >>> fishros initialize >>>
 source /opt/ros/humble/setup.bash
 # <<< fishros initialize <<<
 
-#source /home/hy/moveit2_ws/install/setup.bash
-export PATH="$PATH:$HOME/.local/bin"
-
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+source ~/Learning/moveit2_ws/install/setup.bash
+export CMAKE_PREFIX_PATH=~/Learning/moveit2_ws/install:$CMAKE_PREFIX_PATH
 
 
-
+for dir in ~/Learning/moveit2_ws/install/*/lib; do
+    export LD_LIBRARY_PATH=$dir:$LD_LIBRARY_PATH
+done
 
 
 
 
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/home/auauau/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/home/auauau/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/home/auauau/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/home/auauau/miniconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
 
-
-export ROS_DOMAIN_ID=42
-#alias code='/usr/share/code/code --no-sandbox' 
-
-
-# >>> wust_vision dev >>>
-py() { 
-    source ~/anaconda3/etc/profile.d/conda.sh
-    echo "已激活 conda, conda activate激活环境，conda deactivate退出环境， conda info --envs查看环境"
-}
-
-buildme() { 
-    colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
-}
-
-builddebug() { 
-    colcon build --packages-select "$1" --cmake-args -DCMAKE_BUILD_TYPE=Debug --symlink-install
-}
-
-killros() { 
-    pkill -f ros && ros2 daemon stop && ros2 daemon start
-}
-
-format() { 
-    find . -path ./build -prune -o \
-    -type f \( -name '*.h' -o -name '*.hpp' -o -name '*.c' -o -name '*.cu' -o -name '*.cpp' \) \
-    -exec clang-format -i {} +
-}
-
-s() { 
-    source install/setup.bash
-}
-
-hik() { 
-    export MVCAM_SDK_PATH=/opt/MVS
-    export MVCAM_COMMON_RUNENV=/opt/MVS/lib
-    export MVCAM_GENICAM_CLPROTOCOL=/opt/MVS/lib/CLProtocol
-    export ALLUSERSPROFILE=/opt/MVS/MVFG
-    export LD_LIBRARY_PATH=/opt/MVS/lib/64:/opt/MVS/lib/32:$LD_LIBRARY_PATH
-}
-# <<< wust_vision dev <<<
-. "$HOME/.cargo/env"
-. "$HOME/.cargo/env"
-export PATH="${HOME}/.bin:${PATH}"
-
-
-
-export PATH=/usr/local/go/bin:$PATH
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export LD_LIBRARY_PATH=/home/hy/TensorRT-10.6.0.26/lib:$LD_LIBRARY_PATH
-export CUDA_HOME=/usr/local/cuda-12.6
-export PATH=$CUDA_HOME/bin:$PATH
-export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/home/hy/onnxruntime-linux-x64-gpu-1.22.0/lib:$LD_LIBRARY_PATH
-
-#export LUCKFOX_SDK_PATH=/home/hy/luckfox-pico
-#export GLIBC_COMPILER=/usr/bin/arm-linux-gnueabihf-
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-export PATH=$JAVA_HOME/bin:$PATH
-source ~/acado/build/acado_env.sh
-
-source /usr/local/share/sentry_interfase/local_setup.bash
+export PATH=$PATH:/usr/local/go/bin

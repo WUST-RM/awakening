@@ -12,11 +12,11 @@ set(CMAKE_BUILD_TYPE "Debug")
 message(STATUS "--------------------CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}--------------------")
 
 
-option(BUILD_WITH_TRT      "Enable TensorRT backend"   ON)
+option(BUILD_WITH_TRT      "Enable TensorRT backend"   OFF)
 option(BUILD_WITH_OPENVINO "Enable OpenVINO backend"   ON)
-option(BUILD_SENTRY "Enable Sentry"   ON)
+option(BUILD_SENTRY "Enable Sentry"   OFF)
 option(BUILD_HERO "Enable Hero"   ON)
-option(BUILD_RADAR "Enable Radar"   ON)
+option(BUILD_RADAR "Enable Radar"   OFF)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake)
 
 
@@ -24,12 +24,17 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${PROJECT_SOURCE_DIR}/cmake)
 
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 REQUIRED)
+list(FILTER CMAKE_SYSTEM_PREFIX_PATH EXCLUDE REGEX "miniconda3")
+list(FILTER CMAKE_SYSTEM_INCLUDE_PATH EXCLUDE REGEX "miniconda3")
+list(FILTER CMAKE_SYSTEM_LIBRARY_PATH EXCLUDE REGEX "miniconda3")
 find_package(fmt REQUIRED)
 find_package(yaml-cpp REQUIRED)
 find_package(Ceres REQUIRED)
 find_package(HikSDK REQUIRED)
 find_package(TBB REQUIRED)
+set(SPDLOG_FMT_EXTERNAL OFF CACHE BOOL "Use external fmt" FORCE)
 find_package(spdlog REQUIRED)
+
 
 
 set(BUILD_DEFINITIONS "")
@@ -72,6 +77,7 @@ include_directories(${PROJECT_NAME}_utils PUBLIC
     ${OpenCV_INCLUDE_DIRS}
 )
 file(GLOB_RECURSE UTILS_SOURCES CONFIGURE_DEPENDS src/utils/*.cpp 3rdparty/*.cpp 3rdparty/*.c)
+list(FILTER UTILS_SOURCES EXCLUDE REGEX "3rdparty/backward-cpp/test")
 if(BUILD_WITH_TRT)
     file(GLOB_RECURSE UTILS_CUDA_SOURCES CONFIGURE_DEPENDS src/utils/*.cu)
     list(APPEND UTILS_SOURCES ${UTILS_CUDA_SOURCES})
@@ -104,8 +110,16 @@ pkg_check_modules(GSTREAMER REQUIRED
 pkg_check_modules(AVUTIL REQUIRED libavutil)
 pkg_check_modules(AVCODEC REQUIRED libavcodec)
 pkg_check_modules(SWSCALE REQUIRED libswscale)
+find_package(Protobuf REQUIRED)
+set(PROTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/tasks/eyes_of_blind/proto")
+set(PROTO_FILES "${PROTO_DIR}/video_stream.proto")
+set(PROTO_BINARY_DIR "${CMAKE_BINARY_DIR}/proto_generated")
+file(MAKE_DIRECTORY ${PROTO_BINARY_DIR})
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
+include_directories(${CMAKE_BINARY_DIR})
 
 file(GLOB_RECURSE BLIND_SOURCES CONFIGURE_DEPENDS src/tasks/eyes_of_blind/*.cpp)
+list(APPEND BLIND_SOURCES ${PROTO_SRCS})
 add_library(${PROJECT_NAME}_eyes_of_blind SHARED ${BLIND_SOURCES})
 target_include_directories(${PROJECT_NAME}_eyes_of_blind
     PUBLIC
@@ -113,10 +127,11 @@ target_include_directories(${PROJECT_NAME}_eyes_of_blind
 )
 target_link_libraries(${PROJECT_NAME}_eyes_of_blind
     ${PROJECT_NAME}_utils
-    ${GSTREAMER_LIBRARY_DIRS}
+    ${GSTREAMER_LIBRARIES}
     ${AVUTIL_LIBRARIES}
     ${AVCODEC_LIBRARIES}
     ${SWSCALE_LIBRARIES}
+    ${Protobuf_LIBRARIES}
 )
 endif()
 
@@ -206,6 +221,7 @@ add_common_executable(blind_test src/runtime/test/blind_test.cpp)
 target_link_libraries(blind_test
     ${PROJECT_NAME}_eyes_of_blind
 )
+
 endif()
 if(BUILD_RADAR)
 add_common_executable(radar_detect src/runtime/radar_detect.cpp)

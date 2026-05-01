@@ -1,4 +1,7 @@
 #!/bin/bash
+# 屏蔽 conda 路径（避免与系统库冲突）
+export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v miniconda | paste -sd:)
+export LD_LIBRARY_PATH=$(echo "$LD_LIBRARY_PATH" | tr ':' '\n' | grep -v miniconda | paste -sd:)
 
 WORK_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 BUILD_DIR="$WORK_DIR/build"
@@ -78,7 +81,11 @@ if [[ "$1" == "build" || "$1" == "rebuild" || "$1" == "run" ]]; then
     cmake -S "$WORK_DIR" -B "$BUILD_DIR" \
         -G Ninja \
         -DCMAKE_C_COMPILER=clang \
-        -DCMAKE_CXX_COMPILER=clang++ 
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DSPDLOG_FMT_EXTERNAL=OFF \
+        -DCMAKE_IGNORE_PREFIX_PATH="/home/auauau/miniconda3" \
+        -DPython3_EXECUTABLE=/usr/bin/python3
+
     if [ $? -ne 0 ]; then
         echo -e "${red}\n--- CMake Failed ---${reset}"
         exit 1

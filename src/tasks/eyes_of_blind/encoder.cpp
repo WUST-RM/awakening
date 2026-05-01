@@ -1,6 +1,6 @@
 #include "encoder.hpp"
 #include "utils/logger.hpp"
-
+#include "image_preprocessor.hpp"
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
@@ -95,6 +95,7 @@ struct Encoder::Impl {
 
     std::mutex buffer_mutex_;
     std::vector<uint8_t> stream_buffer_;
+    std::unique_ptr<ImagePreprocessor> preprocessor_;
 
     Impl(const YAML::Node& config) {
         params_.load(config);
@@ -102,6 +103,8 @@ struct Encoder::Impl {
         bucket_.init(params_.max_packets_per_sec, params_.max_packets_per_sec * 2);
 
         max_queue_packets_ = params_.max_packets_per_sec * 4;
+
+        preprocessor_ = std::make_unique<ImagePreprocessor>(config);
 
         initialize_gstreamer();
     }
@@ -331,22 +334,12 @@ struct Encoder::Impl {
     }
 
     cv::Mat preprocess(const cv::Mat& frame) {
-        if (frame.empty())
-            return {};
+        if (!preprocessor_)
+            return frame;
 
-        int roi_w = std::min(params_.roi_w, frame.cols);
-        int roi_h = std::min(params_.roi_h, frame.rows);
-
-        int x = (frame.cols - roi_w) / 2;
-        int y = (frame.rows - roi_h) / 2;
-
-        cv::Mat roi = frame(cv::Rect(x, y, roi_w, roi_h));
-
-        cv::Mat out;
-        cv::resize(roi, out, cv::Size(params_.out_w, params_.out_h));
-        return out;
+        return preprocessor_->process(frame);
     }
-
+    
     void push_frame(const cv::Mat& frame) {
         if (frame.empty())
             return;
