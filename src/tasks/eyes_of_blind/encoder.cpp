@@ -1,6 +1,6 @@
 #include "encoder.hpp"
-#include "utils/logger.hpp"
 #include "image_preprocessor.hpp"
+#include "utils/logger.hpp"
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>
@@ -170,23 +170,23 @@ struct Encoder::Impl {
         //     "tune",             1,                 // film:1
         //     "bframes",          2,
         //     "ref",              2,
-        //     "key-int-max",      60,               
+        //     "key-int-max",      60,
         //     "rc-lookahead",     10,
         //     "sync-lookahead",   0,
-        //     "sliced-threads",   FALSE,             
+        //     "sliced-threads",   FALSE,
         //     "byte-stream",      TRUE,
         //     "aud",              TRUE,
         //     "option-string",
         //     "repeat-headers=1:"
         //     "force-cfr=1:"
-        //     "scenecut=40:"                     
-        //     "open-gop=0:"                      
+        //     "scenecut=40:"
+        //     "open-gop=0:"
         //     "b-adapt=2:"
         //     "me=umh:"
-        //     "me-range=32:"                     
-        //     "subme=7:"                        
+        //     "me-range=32:"
+        //     "subme=7:"
         //     "trellis=2:"
-        //     "deblock=0,0:"                     
+        //     "deblock=0,0:"
         //     "aq-mode=2:"
         //     "aq-strength=1.2:"
         //     "psy-rd=0.4,0.0:"
@@ -194,31 +194,43 @@ struct Encoder::Impl {
         //     "qpmax=38",
         //     nullptr
         // );
-        
+
         // 延迟较低，清晰度较差
-        g_object_set(encoder,
-            "bitrate",         params_.target_bitrate,               // 目标码率
-            "speed-preset",     9,                 // veryslow
-            "tune",             1,                 // zerolatency:0x00000004
-            "bframes",          0,
-            "ref",              5,
-            "key-int-max",      60,               
-            "rc-lookahead",     3,
-            "sync-lookahead",   0,
-            "sliced-threads",   FALSE,             
-            "byte-stream",      TRUE,
-            "aud",              TRUE,
+        g_object_set(
+            encoder,
+            "bitrate",
+            params_.target_bitrate, // 目标码率
+            "speed-preset",
+            9, // veryslow
+            "tune",
+            1, // zerolatency:0x00000004
+            "bframes",
+            0,
+            "ref",
+            5,
+            "key-int-max",
+            60,
+            "rc-lookahead",
+            3,
+            "sync-lookahead",
+            0,
+            "sliced-threads",
+            FALSE,
+            "byte-stream",
+            TRUE,
+            "aud",
+            TRUE,
             "option-string",
             "repeat-headers=1:"
             "force-cfr=1:"
-            "scenecut=40:"                     
-            "open-gop=0:"                      
+            "scenecut=40:"
+            "open-gop=0:"
             "b-adapt=2:"
             "me=hex:"
-            "me-range=32:"                     
-            "subme=7:"                        
+            "me-range=32:"
+            "subme=7:"
             "trellis=2:"
-            "deblock=0,0:"                     
+            "deblock=0,0:"
             "aq-mode=2:"
             "aq-strength=1.2:"
             "psy-rd=0.4,0.0:"
@@ -371,7 +383,7 @@ struct Encoder::Impl {
 
         return preprocessor_->process(frame);
     }
-    
+
     void push_frame(const cv::Mat& frame) {
         if (frame.empty())
             return;

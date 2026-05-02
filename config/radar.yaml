@@ -22,9 +22,11 @@ lidar_driver:
 
 radar_cal:
   source_in_target:
-    t: [0.2,0.0,0.0]
-    R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
-  target_pcd: /home/hy/radar_data/rmuc_2026_radar.pcd
+    t: [-0.44,-2.46168,1.65378]
+    R: [0.999943,  0.00847229,  0.00645632,
+      -0.00841243 ,   0.999922 ,-0.00924399,
+      -0.00653414 , 0.00918915,    0.999936]
+  target_pcd: /home/hy/radar_data/surface_points.pcd
 
 
 
@@ -42,7 +44,7 @@ camera:
     acquisition_frame_rate_enable: false
     acquisition_frame_rate: 30
     exposure_time: 10000
-    gain: 16.9
+    gain: 1.9
     gamma: 0.7 #Bayer用不了
     trigger_mode: Off
     trigger_source: ""

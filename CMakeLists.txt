@@ -196,11 +196,13 @@ if(ROS2_FULL_FOUND)
     endif()
     if(BUILD_RADAR)
     find_package(small_gicp REQUIRED)
+    find_package(Open3D REQUIRED)
     file(GLOB_RECURSE RADAR_DETECT_SOURCES CONFIGURE_DEPENDS src/tasks/radar_detect/*.cpp)
     add_library(${PROJECT_NAME}_radar_detect SHARED ${RADAR_DETECT_SOURCES})
     target_link_libraries(${PROJECT_NAME}_radar_detect
         ${PROJECT_NAME}_utils
         ${PROJECT_NAME}_rcl
+        Open3D::Open3D
     )
     endif()
 else()

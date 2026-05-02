@@ -11,7 +11,7 @@ struct PacketHeader {
 #pragma pack(pop)
 
 static_assert(sizeof(PacketHeader) == 8, "Header must be 8 bytes");
-static constexpr std::size_t HEADER_SIZE = sizeof(PacketHeader);           // 8 bytes for header
+static constexpr std::size_t HEADER_SIZE = sizeof(PacketHeader); // 8 bytes for header
 static constexpr std::size_t PAYLOAD_SIZE = MAX_PACKET_SIZE - HEADER_SIZE; // 292 bytes for payload
 
 struct BlindSend {

@@ -13,7 +13,7 @@ struct ImagePreprocessor::Impl {
         int crop_size = 800;
         int output_w = 400;
         int output_h = 400;
-        int output_fps = 60;           // 仅用于信息，预处理不依赖
+        int output_fps = 60; // 仅用于信息，预处理不依赖
         bool static_simplify = true;
         int motion_threshold = 14;
         int motion_erode_px = 1;
@@ -35,7 +35,8 @@ struct ImagePreprocessor::Impl {
             motion_erode_px = config["motion_erode_px"].as<int>(motion_erode_px);
             motion_dilate_px = config["motion_dilate_px"].as<int>(motion_dilate_px);
             motion_trail_frames = config["motion_trail_frames"].as<int>(motion_trail_frames);
-            trail_disable_motion_ratio = config["trail_disable_motion_ratio"].as<double>(trail_disable_motion_ratio);
+            trail_disable_motion_ratio =
+                config["trail_disable_motion_ratio"].as<double>(trail_disable_motion_ratio);
             bg_update_alpha = config["bg_update_alpha"].as<double>(bg_update_alpha);
             bg_blur_sigma = config["bg_blur_sigma"].as<double>(bg_blur_sigma);
             center_clear_size = config["center_clear_size"].as<int>(center_clear_size);
@@ -76,7 +77,14 @@ struct ImagePreprocessor::Impl {
 
         // 2. 缩放
         cv::Mat resized;
-        cv::resize(cropped, resized, cv::Size(params_.output_w, params_.output_h), 0, 0, cv::INTER_LINEAR);
+        cv::resize(
+            cropped,
+            resized,
+            cv::Size(params_.output_w, params_.output_h),
+            0,
+            0,
+            cv::INTER_LINEAR
+        );
         if (roi_out) {
             resized.copyTo(*roi_out);
         }
@@ -118,17 +126,19 @@ struct ImagePreprocessor::Impl {
         if (params_.motion_dilate_px > 0) {
             if (motion_dilate_kernel_.empty()) {
                 int k = 2 * params_.motion_dilate_px + 1;
-                motion_dilate_kernel_ = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(k, k));
+                motion_dilate_kernel_ =
+                    cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(k, k));
             }
             cv::dilate(motion_mask, motion_mask, motion_dilate_kernel_, cv::Point(-1, -1), 1);
         }
 
-        double motion_ratio_raw = static_cast<double>(cv::countNonZero(motion_mask)) / motion_mask.total();
+        double motion_ratio_raw =
+            static_cast<double>(cv::countNonZero(motion_mask)) / motion_mask.total();
         bool suppress_trail = (motion_ratio_raw >= params_.trail_disable_motion_ratio);
 
         // 中心保护区域
         if (params_.center_clear_size > 0) {
-            int clear = std::min({params_.center_clear_size, working.cols, working.rows});
+            int clear = std::min({ params_.center_clear_size, working.cols, working.rows });
             int x0 = std::max(0, working.cols / 2 - clear / 2);
             int y0 = std::max(0, working.rows / 2 - clear / 2);
             int cw = std::min(clear, working.cols - x0);
@@ -141,7 +151,7 @@ struct ImagePreprocessor::Impl {
         if (params_.force_monochrome) {
             if (params_.center_clear_size > 0) {
                 color_mask = cv::Mat::zeros(working.size(), CV_8UC1);
-                int clear = std::min({params_.center_clear_size, working.cols, working.rows});
+                int clear = std::min({ params_.center_clear_size, working.cols, working.rows });
                 int x0 = std::max(0, working.cols / 2 - clear / 2);
                 int y0 = std::max(0, working.rows / 2 - clear / 2);
                 int cw = std::min(clear, working.cols - x0);
@@ -178,11 +188,14 @@ struct ImagePreprocessor::Impl {
             motion_mask_history_.push_back(motion_mask.clone());
             trail_frame_history_.push_back(working.clone());
             size_t max_hist = static_cast<size_t>(params_.motion_trail_frames + 1);
-            while (motion_mask_history_.size() > max_hist) motion_mask_history_.pop_front();
-            while (trail_frame_history_.size() > max_hist) trail_frame_history_.pop_front();
+            while (motion_mask_history_.size() > max_hist)
+                motion_mask_history_.pop_front();
+            while (trail_frame_history_.size() > max_hist)
+                trail_frame_history_.pop_front();
 
-            if (!suppress_trail && motion_mask_history_.size() > 1 &&
-                motion_mask_history_.size() == trail_frame_history_.size()) {
+            if (!suppress_trail && motion_mask_history_.size() > 1
+                && motion_mask_history_.size() == trail_frame_history_.size())
+            {
                 cv::Mat trail_mask = motion_mask.clone();
                 cv::Mat trail_img = working.clone();
                 for (size_t i = 0; i < motion_mask_history_.size() - 1; ++i) {
@@ -203,14 +216,13 @@ struct ImagePreprocessor::Impl {
     }
 };
 
-ImagePreprocessor::ImagePreprocessor(const YAML::Node& config)
-    : _impl(std::make_unique<Impl>(config)) {}
+ImagePreprocessor::ImagePreprocessor(const YAML::Node& config):
+    _impl(std::make_unique<Impl>(config)) {}
 
 ImagePreprocessor::~ImagePreprocessor() noexcept = default;
 
-cv::Mat ImagePreprocessor::process(const cv::Mat& input,
-                                   cv::Mat* roi_out,
-                                   cv::Mat* static_removed_out) {
+cv::Mat
+ImagePreprocessor::process(const cv::Mat& input, cv::Mat* roi_out, cv::Mat* static_removed_out) {
     return _impl->process(input, roi_out, static_removed_out);
 }
 

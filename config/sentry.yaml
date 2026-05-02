@@ -8,7 +8,7 @@ serial:
   baud_rate: 115200
   char_size: 8
   read_buf_size: 4096
-serial_send_to_image_microseconds: 0
+serial_send_to_image_microseconds: 2000
 use_sim: false
 
 recorder:
@@ -110,7 +110,7 @@ auto_aim_fsm:
 
 very_aimer:
   base_yaw_offset: -1.0
-  base_pitch_offset: -3.0
+  base_pitch_offset: 1.2
   # base_yaw_offset: -0.0
   # base_pitch_offset: -0.0
   sample_total_time: 1.0

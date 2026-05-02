@@ -7,15 +7,15 @@
 #include "utils/semaphore_guard.hpp"
 #include "utils/signal_guard.hpp"
 #include "utils/utils.hpp"
+#include "video_stream.pb.h"
+#include <array>
+#include <cstring>
+#include <mqtt/async_client.h>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/opencv.hpp>
-#include <array>
-#include <cstring>
-#include <yaml-cpp/node/parse.h>
-#include "video_stream.pb.h"
-#include <mqtt/async_client.h>
 #include <string>
+#include <yaml-cpp/node/parse.h>
 using namespace awakening;
 struct CameraTag {};
 
@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
                         cv::Mat out;
                         if (serial && config["serial"]["enable"].as<bool>()) {
                             // 将整个 BlindSend (300字节) 封装进 Protobuf
-                            std::array<uint8_t, eyes_of_blind::MAX_PACKET_SIZE> raw{};
+                            std::array<uint8_t, eyes_of_blind::MAX_PACKET_SIZE> raw {};
                             std::memcpy(raw.data(), &pkg, eyes_of_blind::MAX_PACKET_SIZE);
 
                             doorlock_sniper::CustomByteBlock block;
@@ -116,11 +116,11 @@ int main(int argc, char** argv) {
                                 AWAKENING_ERROR("Protobuf serialization failed");
                                 continue;
                             }
-                            serial->write(std::vector<uint8_t>(serialized.begin(), serialized.end()));
-                        }
-                        else if(use_mqtt && mqtt_client && mqtt_client->is_connected()){
+                            serial->write(std::vector<uint8_t>(serialized.begin(), serialized.end())
+                            );
+                        } else if (use_mqtt && mqtt_client && mqtt_client->is_connected()) {
                             // MQTT 发送
-                            std::array<uint8_t, eyes_of_blind::MAX_PACKET_SIZE> raw{};
+                            std::array<uint8_t, eyes_of_blind::MAX_PACKET_SIZE> raw {};
                             std::memcpy(raw.data(), &pkg, eyes_of_blind::MAX_PACKET_SIZE);
                             doorlock_sniper::CustomByteBlock block;
                             block.set_data(raw.data(), eyes_of_blind::MAX_PACKET_SIZE);
