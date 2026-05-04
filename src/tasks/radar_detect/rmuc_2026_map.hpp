@@ -1,4 +1,5 @@
 #pragma once
+#include "tasks/radar_detect/tracker.hpp"
 #include "tasks/radar_detect/type.hpp"
 #include <Eigen/src/Core/Matrix.h>
 #include <fstream>
@@ -9,6 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 #include <yaml-cpp/node/node.h>
 #include <yaml-cpp/node/parse.h>
 namespace awakening::radar_detect {
@@ -19,6 +21,8 @@ public:
         auto map_path = config["map_path"].as<std::string>();
         image.image = cv::imread(map_path);
         image.self_color = self_color;
+        d_factor_ = config["d_factor"].as<double>();
+        cos_factor_ = config["cos_factor"].as<double>();
         auto guess_path = config["guess_path"].as<std::string>();
         auto guess_config = YAML::LoadFile(guess_path);
         SingleRobotGuess self_1(image, guess_config["self_1"]);
@@ -79,6 +83,32 @@ public:
         for (auto& [key, guess]: robot_guesses) {
             guess.edit();
         }
+    }
+    Eigen::Vector3d predict_guess(
+        const CarClass& cc,
+        const Eigen::Vector3d& last_pos,
+        const Eigen::Vector3d& v_vec
+    ) noexcept {
+        int key = std::to_underlying(cc);
+        auto guess = robot_guesses[key];
+        auto guesses = guess.get_guesses();
+        Eigen::Vector3d predict = guesses.empty() ? Eigen::Vector3d::Zero() : guesses.front();
+        double best_score = -1e9;
+
+        for (const auto& point: guesses) {
+            Eigen::Vector3d d_vector = point - last_pos;
+            double dot_product = v_vec.dot(d_vector);
+            double v_norm = v_vec.norm();
+            double d_norm = d_vector.norm();
+            double cos_sim = dot_product / (v_norm * d_norm + 1e-8);
+            double d_score = std::exp(-d_norm * d_factor_);
+            double score = cos_factor_ * cos_sim + (1 - cos_factor_) * d_score;
+            if (score > best_score) {
+                best_score = score;
+                predict = point;
+            }
+        }
+        return predict;
     }
     void dump_yaml(const std::string& path) const {
         SingleRobotGuess self_1;
@@ -304,6 +334,13 @@ public:
         void declare(const std::string& key, const Eigen::Vector2d& p) {
             guess_positions[key] = p;
         }
+        std::vector<Eigen::Vector3d> get_guesses() const noexcept {
+            std::vector<Eigen::Vector3d> guesses;
+            for (const auto& [k, v]: guess_positions) {
+                guesses.push_back(Eigen::Vector3d(v.x(), v.y(), 0));
+            }
+            return guesses;
+        }
         std::unordered_map<std::string, Eigen::Vector2d> guess_positions;
         CarClass car_class_;
         Image image_;
@@ -312,5 +349,7 @@ public:
     };
     std::unordered_map<int, SingleRobotGuess> robot_guesses;
     Image image;
+    double d_factor_;
+    double cos_factor_;
 };
 } // namespace awakening::radar_detect

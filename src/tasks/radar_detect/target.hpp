@@ -118,9 +118,9 @@ struct PointTarget {
     PointTarget() {}
     PointTarget(
         const PointTargetConfig& cfg,
-        const Eigen::Vector3f& init_p,
+        const Eigen::Vector3d& init_p,
         const TimePoint& t,
-        bool use_vel
+        bool use_vel = true
     ) {
         target_config = cfg;
         this->use_vel = use_vel;
@@ -209,7 +209,7 @@ struct PointTarget {
         state.timestamp = t;
     }
     double last_ypd_y_;
-    [[nodiscard]] Eigen::Matrix<double, Z_N, 1> getMeasure(const Eigen::Vector3f& p) noexcept {
+    [[nodiscard]] Eigen::Matrix<double, Z_N, 1> getMeasure(const Eigen::Vector3d& p) noexcept {
         double ypd_y = std::atan2(p.y(), p.x());
         ypd_y = this->last_ypd_y_ + angles::shortest_angular_distance(this->last_ypd_y_, ypd_y);
         this->last_ypd_y_ = ypd_y;
@@ -217,7 +217,7 @@ struct PointTarget {
         const double ypd_d = std::sqrt(p.x() * p.x() + p.y() * p.y() + p.z() * p.z());
         return Eigen::Vector3d(ypd_y, ypd_p, ypd_d);
     }
-    void update(const Eigen::Vector3f& p, const TimePoint& t) {
+    void update(const Eigen::Vector3d& p, const TimePoint& t) {
         const auto u_r = [this](const Eigen::Matrix<double, Z_N, 1>& z) {
             return this->compute_measurement_covariance(z);
         };
@@ -227,6 +227,10 @@ struct PointTarget {
         state.x = esekf->update(measurement);
         last_update = t;
         state.timestamp = t;
+    }
+    void set_ekf_state(const State& s) {
+        state = s;
+        esekf->setState(state.x);
     }
     State state;
     TimePoint last_update;

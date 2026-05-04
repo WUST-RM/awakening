@@ -1,5 +1,5 @@
 max_infer_num: 1
-
+self_color: red
 tf:
   mid70_in_target_map:
     t: [0.0,0.0,0.0]
@@ -9,6 +9,11 @@ tf:
     #   -0.00841243 ,   0.999922 ,-0.00924399,
     #   -0.00653414 , 0.00918915,    0.999936]
   camera_cv_in_mid70:
+    t: [0.2612205549, -0.0012553169, 0.1117908554]
+    R: [-0.007474, 0.014602, -0.999875, 
+        -0.999968, -0.007126, 0.007589, 
+        0.007157, 0.999877, 0.014633]
+  camera_target_map:
     t: [0.2612205549, -0.0012553169, 0.1117908554]
     R: [-0.007474, 0.014602, -0.999875, 
         -0.999968, -0.007126, 0.007589, 
@@ -31,8 +36,20 @@ detector:
 
 map:
   map_path: /home/hy/awakening/config/rmuc2026.png
+  d_factor: 0.01
+  cos_factor: 0.003
   guess_path: /home/hy/awakening/config/guess_point.yaml
-
+car_pool:
+  to_guess_dt: 3.0
+tracker:
+  max_match_cost: 5.0
+  track_threshold: 5
+  lost_time: 1.0
+  v_damping: 0.9
+  iou_thresh: 0.5
+  w_dist: 5.5
+  w_iou: 2.0
+  w_id: 7.0
 
 camera: 
   hik_camera:

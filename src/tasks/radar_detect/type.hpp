@@ -18,6 +18,16 @@ namespace awakening::radar_detect {
 enum class ArmorClass : int { NO1, NO2, NO3, NO4, NO5, SENTRY, OUTPOST, UNKNOWN, N };
 enum class ArmorColor : int { RED, BLUE, NONE, N };
 enum class SelfColor : bool { RED, BLUE };
+inline SelfColor SelfColor_from_str(const std::string& _str) {
+    auto str = utils::to_upper(_str);
+    if (str == "RED") {
+        return SelfColor::RED;
+    } else if (str == "BLUE") {
+        return SelfColor::BLUE;
+    } else {
+        throw std::invalid_argument("Invalid self color string");
+    }
+}
 inline std::string armor_class_to_str(ArmorClass cls) {
     constexpr const char* details[] = { "NO1", "NO2",    "NO3",     "NO4",
                                         "NO5", "SENTRY", "OUTPOST", "UNKNOWN" };
@@ -105,7 +115,54 @@ struct Car {
     ArmorColor color = ArmorColor::NONE;
     Eigen::Vector3d point_in_uwb;
     TimePoint timestamp;
-
+    CarClass get_car_class() const {
+        if (color == ArmorColor::NONE) {
+            return CarClass::UNKNOWN;
+        } else if (color == ArmorColor::BLUE) {
+            switch (number) {
+                case ArmorClass::NO1: {
+                    return CarClass::B1;
+                }
+                case ArmorClass::NO2: {
+                    return CarClass::B2;
+                }
+                case ArmorClass::NO3: {
+                    return CarClass::B3;
+                }
+                case ArmorClass::NO4: {
+                    return CarClass::B4;
+                }
+                case ArmorClass::SENTRY: {
+                    return CarClass::B7;
+                }
+                default: {
+                    return CarClass::UNKNOWN;
+                }
+            }
+        } else {
+            switch (number) {
+                case ArmorClass::NO1: {
+                    return CarClass::R1;
+                }
+                case ArmorClass::NO2: {
+                    return CarClass::R2;
+                }
+                case ArmorClass::NO3: {
+                    return CarClass::R3;
+                }
+                case ArmorClass::NO4: {
+                    return CarClass::R4;
+                }
+                case ArmorClass::SENTRY: {
+                    return CarClass::R7;
+                }
+                default: {
+                    return CarClass::UNKNOWN;
+                }
+            }
+        }
+        return CarClass::UNKNOWN;
+    }
     cv::Point2f get_key_point() const {
         auto car_center = bbox.tl() + cv::Point2f(bbox.width / 2, bbox.height / 2);
         cv::Point2f key_p = car_center;
@@ -154,11 +211,10 @@ struct Car {
         }
     }
 };
-struct TheOnlyCar {
-    CarState state;
-    CarClass car_class = CarClass::UNKNOWN;
-    PointTarget uwb_state;
-    TimePoint timestamp;
+struct Cars {
+    std::vector<Car> cars;
+    TimePoint t;
+    int id;
 };
 struct AABB {
     Eigen::Vector3f min_pt;
