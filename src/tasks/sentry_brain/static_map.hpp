@@ -166,7 +166,6 @@ public:
         const int max_panel_width_limit = 400;
 
         while (true) {
-            // --- 地图缩放 ---
             cv::Mat map_vis;
             cv::resize(
                 map_img_,

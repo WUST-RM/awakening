@@ -1,4 +1,19 @@
 max_infer_num: 1
+
+tf:
+  mid70_in_target_map:
+    t: [0.0,0.0,0.0]
+    R: [1.0,0.0,0.0,0.0,1.0,0.0,0.0,0.0,1.0]
+    # t: [-0.44,-2.46168,1.65378]
+    # R: [0.999943,  0.00847229,  0.00645632,
+    #   -0.00841243 ,   0.999922 ,-0.00924399,
+    #   -0.00653414 , 0.00918915,    0.999936]
+  camera_cv_in_mid70:
+    t: [0.2612205549, -0.0012553169, 0.1117908554]
+    R: [-0.007474, 0.014602, -0.999875, 
+        -0.999968, -0.007126, 0.007589, 
+        0.007157, 0.999877, 0.014633]
+
 detector:
   car_confidence_threshold: 0.2
   armor_confidence_threshold: 0.2
@@ -14,20 +29,9 @@ detector:
     min_free_mem_ratio: 0.1
     use_cuda_preproces: true
 
-lidar_driver:
-  batch_dot_num: 9600
-  dest_ip: "192.168.10.203"
-  udp_port: 50010
-  timeout_ms: 1000
-
-radar_cal:
-  source_in_target:
-    t: [-0.44,-2.46168,1.65378]
-    R: [0.999943,  0.00847229,  0.00645632,
-      -0.00841243 ,   0.999922 ,-0.00924399,
-      -0.00653414 , 0.00918915,    0.999936]
-  target_pcd: /home/hy/radar_data/surface_points.pcd
-
+map:
+  map_path: /home/hy/awakening/config/rmuc2026.png
+  guess_path: /home/hy/awakening/config/guess_point.yaml
 
 
 camera: 
@@ -41,7 +45,7 @@ camera:
     height: 3036
     offset_x: 0
     offset_y: 0
-    acquisition_frame_rate_enable: false
+    acquisition_frame_rate_enable: true
     acquisition_frame_rate: 30
     exposure_time: 10000
     gain: 1.9
@@ -60,49 +64,47 @@ camera:
     # analog_gain: 100.0
     # gamma: 120
   camera_info:
-    #8mm
     # image_width: 1440
     # image_height: 1080
     # camera_name: narrow_stereo
     # camera_matrix:
     #   rows: 3
     #   cols: 3
-    #   data: [2419.64498,    0.     ,  719.05623,
-    #             0.     , 2414.38209,  538.71651,
+    #   data: [1814.19888,    0.     ,  730.27359,
+    #             0.     , 1807.37177,  529.57031,
     #             0.     ,    0.     ,    1.     ]
     # distortion_model: plumb_bob
     # distortion_coefficients:
     #   rows: 1
     #   cols: 5
-    #   data: [-0.033521, 0.087954, -0.002045, -0.001438, 0.000000]
+    #   data: [-0.089138, 0.114766, 0.000034, 0.000238, 0.000000]
     # rectification_matrix:
     #   rows: 3
     #   cols: 3
     #   data: [1., 0., 0.,
-    #          0., 1., 0.,
-    #          0., 0., 1.]
+    #         0., 1., 0.,
+    #         0., 0., 1.]
     # projection_matrix:
     #   rows: 3
     #   cols: 4
-    #   data: [2413.22632,    0.     ,  717.5196 ,    0.     ,
-    #             0.     , 2408.83228,  537.43444,    0.     ,
+    #   data: [1793.54229,    0.     ,  730.67194,    0.     ,
+    #             0.     , 1794.48784,  529.46193,    0.     ,
     #             0.     ,    0.     ,    1.     ,    0.     ]
-    #6mm
 
-    image_width: 1440
-    image_height: 1080
-    camera_name: narrow_stereo
+    image_width: 4000
+    image_height: 3036
+    camera_name: camera1
     camera_matrix:
       rows: 3
       cols: 3
-      data: [1814.19888,    0.     ,  730.27359,
-                0.     , 1807.37177,  529.57031,
+      data: [4505.44779,    0.     , 1990.47019,
+                0.     , 4507.4661 , 1572.4761 ,
                 0.     ,    0.     ,    1.     ]
     distortion_model: plumb_bob
     distortion_coefficients:
       rows: 1
       cols: 5
-      data: [-0.089138, 0.114766, 0.000034, 0.000238, 0.000000]
+      data: [-0.115244, 0.478127, -0.000094, 0.001181, 0.000000]
     rectification_matrix:
       rows: 3
       cols: 3
@@ -112,33 +114,45 @@ camera:
     projection_matrix:
       rows: 3
       cols: 4
-      data: [1793.54229,    0.     ,  730.67194,    0.     ,
-                0.     , 1794.48784,  529.46193,    0.     ,
+      data: [4553.43996,    0.     , 1994.43544,    0.     ,
+                0.     , 4554.90789, 1570.34321,    0.     ,
                 0.     ,    0.     ,    1.     ,    0.     ]
-    #12mm
-    # image_width: 1440
-    # image_height: 1080
-    # camera_name: narrow_stereo
-    # camera_matrix:
-    #   rows: 3
-    #   cols: 3
-    #   data: [3655.11292,    0.     ,  748.66803,
-    #             0.     , 3648.34439,  556.97683,
-    #             0.     ,    0.     ,    1.     ]
-    # distortion_model: plumb_bob
-    # distortion_coefficients:
-    #   rows: 1
-    #   cols: 5
-    #   data: [-0.058763, 1.430269, 0.001191, 0.001641, 0.000000]
-    # rectification_matrix:
-    #   rows: 3
-    #   cols: 3
-    #   data: [1., 0., 0.,
-    #          0., 1., 0.,
-    #          0., 0., 1.]
-    # projection_matrix:
-    #   rows: 3
-    #   cols: 4
-    #   data: [3659.22949,    0.     ,  748.71496,    0.     ,
-    #             0.     , 3652.02661,  556.81908,    0.     ,
-    #             0.     ,    0.     ,    1.     ,    0.     ]
+
+lidar_location:
+  target_map_path: /home/hy/awakening/source.pcd
+  voxel_size: 0.5
+  min_p: [0.0,-10.0,-3.0]
+  max_p: [27.0,3.0,0.0]
+  lost_dt: 0.1
+  match_vol_ratio: 0.3
+  diff_th: 0.15
+  diff_accumulation_time: 1.0
+  cluster_eps: 0.3
+  cluster_min_pts: 5
+  cluster_leaf_size: 0.05
+  car_target:
+    grav_target:
+      esekf_iter_num: 3
+      yp_r: 0.0015
+      dis_r: 0.02
+      qxyz: [10.0, 10.0, 10.0]
+    aabb_target: #相对grav_target坐标
+      esekf_iter_num: 1
+      yp_r: 0.01
+      dis_r: 0.01
+      qxyz: [10.1, 10.1, 10.1]
+
+
+lidar_driver:
+  batch_dot_num: 9600
+  dest_ip: "192.168.10.203"
+  udp_port: 50010
+  timeout_ms: 1000
+
+radar_cal:
+  source_in_target:
+    t: [-0.44,-3.46755,1.65378]
+    R: [0.999943,  0.00847229,  0.00645632,
+      -0.00841243 ,   0.999922 ,-0.00924399,
+      -0.00653414 , 0.00918915,    0.999936]
+  target_pcd: /home/hy/radar_data/combined_with_walls.pcd

@@ -3,6 +3,7 @@
 #include "utils/logger.hpp"
 #include <rclcpp/executors.hpp>
 #include <rclcpp/node.hpp>
+#include <rclcpp/publisher.hpp>
 #include <rclcpp/time.hpp>
 #include <vector>
 namespace awakening::rcl {
@@ -33,7 +34,8 @@ public:
     }
     template<class T>
     auto make_pub(const std::string& topic_name, const rclcpp::QoS& qos) noexcept {
-        return rclcpp->create_publisher<T>(topic_name, qos);
+        auto pub = rclcpp->create_publisher<T>(topic_name, qos);
+        return pub;
     }
     template<class T, typename F>
     auto make_sub(const std::string& topic_name, const rclcpp::QoS& qos, F&& callback) {
@@ -51,5 +53,6 @@ public:
 
     std::shared_ptr<rclcpp::Node> rclcpp;
     std::vector<rclcpp::SubscriptionBase::SharedPtr> subs;
+    std::vector<rclcpp::PublisherBase> pubs;
 };
 } // namespace awakening::rcl

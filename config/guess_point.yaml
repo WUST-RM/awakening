@@ -1,0 +1,20 @@
+self_1:
+  self_supply_area: [2.37246, 2.09651]
+self_2:
+  self_supply_area: [2.27361, 2.12146]
+self_3:
+  self_supply_area: [2.66902, 2.32113]
+self_4:
+  self_supply_area: [2.4466, 2.34609]
+self_7:
+  self_supply_area: [2.49603, 2.32113]
+enemy_1:
+  enemy_supply_area: [25.5287, 12.9035]
+enemy_2:
+  enemy_supply_area: [25.677, 13.0033]
+enemy_3:
+  enemy_supply_area: [25.6275, 12.5541]
+enemy_4:
+  enemy_supply_area: [25.6028, 12.8286]
+enemy_7:
+  enemy_supply_area: [25.8994, 12.7038]

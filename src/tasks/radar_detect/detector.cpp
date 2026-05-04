@@ -148,7 +148,7 @@ struct Detector::Impl {
 
         for (auto& car: cars) {
             car.bbox = utils::transform_rect(car_output.transform_matrix, car.bbox);
-
+            car.timestamp = frame.img_frame.timestamp;
             cv::Rect clamped_bbox = cv::Rect(car.bbox) & roi_safe_bounds;
 
             if (clamped_bbox.area() <= 0) {
